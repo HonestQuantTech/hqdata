@@ -1,0 +1,64 @@
+# Environment & secrets
+.env
+*.key
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+.eggs/
+*.so
+
+# Package managers
+.poetry/
+.pdm.toml
+pyproject.toml
+!pyproject.toml.example
+ Hatch/
+PDM/
+
+# Data files (local databases not committed)
+data/
+*.csv
+*.parquet
+*.db
+*.sqlite
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+.tox/
+
+# Type checking
+.mypy_cache/
+.pyrightconfig.json
+
+# Linting
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Claude Code
+./CLAUDE.local.md
