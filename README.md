@@ -12,10 +12,52 @@
 
 ## 支持的数据源
 
-| 数据源      |
-| ----------- |
-| **AKShare** |
-| **Tushare** |
-| **米筐**    |
-| **迅投**    |
-| **iTick**   |
+| 数据源      | 状态   |
+| ----------- | ------ |
+| **AKShare** | 计划中 |
+| **Tushare** | 计划中 |
+| **米筐**    | 已接入 |
+| **迅投**    | 计划中 |
+| **iTick**   | 计划中 |
+
+## 安装
+
+```bash
+# 创建虚拟环境
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# 安装依赖
+pip install -e .
+
+# 配置凭据 (复制模板并编辑)
+cp .env.example .env
+# 编辑 .env 填入 RQDATA_USERNAME 和 RQDATA_PASSWORD
+```
+
+## 使用
+
+```python
+from hqdata import init_source, get_tick
+
+# 初始化 (凭据从 .env 自动读取)
+init_source("ricequant")
+
+# 获取Tick数据
+df = get_tick("600000", exchange="XSHG", start_date="2026-04-01", end_date="2026-04-02")
+print(df.head())
+```
+
+## 交易所代码
+
+| 交易所 | 代码  | 说明 |
+| ------ | ----- | ---- |
+| 上交所 | XSHG  | SSE  |
+| 深交所 | XSHE  | SZSE |
+
+## 测试
+
+```bash
+pytest tests/ -v
+pytest tests/test_ricequant.py::test_name  # 运行单个测试
+```

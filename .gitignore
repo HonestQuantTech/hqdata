@@ -61,4 +61,5 @@ htmlcov/
 Thumbs.db
 
 # Claude Code
-./CLAUDE.local.md
+CLAUDE.md
+CLAUDE.local.md
