@@ -3,30 +3,9 @@
 from typing import Optional
 import pandas as pd
 from rqdatac import init, get_price
-from rqdatac.services.basic import all_instruments
 from rqdatac.share.errors import RQDataError
 
 from hqdata.sources.base import BaseSource
-
-
-# Exchange mapping: local code -> ricequant code
-EXCHANGE_MAP = {
-    "XSHG": "XSHG",  # Shanghai Stock Exchange
-    "XSHE": "XSHE",  # Shenzhen Stock Exchange
-}
-
-
-def _to_rq_symbol(symbol: str, exchange: str) -> str:
-    """Convert local symbol to ricequant format.
-
-    Args:
-        symbol: Stock code (e.g., "600000")
-        exchange: Exchange code ("XSHG" or "XSHE")
-
-    Returns:
-        Ricequant symbol format (e.g., "600000.XSHG")
-    """
-    return f"{symbol}.{exchange}"
 
 
 class RicequantSource(BaseSource):
@@ -71,15 +50,13 @@ class RicequantSource(BaseSource):
     def get_tick(
         self,
         symbol: str,
-        exchange: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get tick data for a stock.
 
         Args:
-            symbol: Stock code (e.g., "600000")
-            exchange: Exchange code ("XSHG" or "XSHE")
+            symbol: Stock symbol with exchange (e.g., "600000.XSHG")
             start_date: Start date (e.g., "2024-01-01")
             end_date: End date (e.g., "2024-01-02")
 
@@ -91,8 +68,6 @@ class RicequantSource(BaseSource):
             - b1-b5, a1-a5 (bid/ask prices)
             - b1_v-b5_v, a1_v-a5_v (bid/ask volumes)
         """
-        rq_symbol = _to_rq_symbol(symbol, exchange)
-
         fields = [
             "open", "high", "low", "last", "prev_close",
             "volume", "total_turnover",
@@ -104,7 +79,7 @@ class RicequantSource(BaseSource):
         ]
 
         df = get_price(
-            rq_symbol,
+            symbol,
             frequency="tick",
             fields=fields,
             start_date=start_date,
@@ -112,3 +87,25 @@ class RicequantSource(BaseSource):
             market="cn",  # China stocks require market='cn'
         )
         return df
+
+    def get_bar(
+        self,
+        symbol: str,
+        frequency: str = "1d",
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get K-line/bar data for a stock.
+
+        Note: Ricequant tick data only, bar data not implemented yet.
+
+        Args:
+            symbol: Stock symbol with exchange (e.g., "600000.XSHG")
+            frequency: Bar frequency ("1d", "1w", "1m", "5m", "60m")
+            start_date: Start date (e.g., "2024-01-01")
+            end_date: End date (e.g., "2024-01-02")
+
+        Returns:
+            DataFrame with bar data
+        """
+        raise NotImplementedError("Ricequant get_bar not implemented yet. Use Tushare for bar data.")

@@ -12,13 +12,13 @@
 
 ## 支持的数据源
 
-| 数据源      | 状态   |
-| ----------- | ------ |
-| **AKShare** | 计划中 |
-| **Tushare** | 计划中 |
-| **米筐**    | 已接入 |
-| **迅投**    | 计划中 |
-| **iTick**   | 计划中 |
+| 数据源      | 状态   | 说明 |
+| ----------- | ------ | ---- |
+| **AKShare** | 计划中 | 免费，实时数据 |
+| **Tushare** | 已接入 | 需注册充值，支持日线/指数 |
+| **米筐**    | 已接入 | 需license，支持Tick |
+| **迅投**    | 计划中 | 需迅投终端 |
+| **iTick**   | 计划中 | 需注册 |
 
 ## 安装
 
@@ -32,28 +32,35 @@ pip install -e .
 
 # 配置凭据 (复制模板并编辑)
 cp .env.example .env
-# 编辑 .env 填入 RQDATA_USERNAME 和 RQDATA_PASSWORD
+# 编辑 .env 填入 RQDATA_USERNAME (米筐) 或 TUSHARE_TOKEN (Tushare)
 ```
 
 ## 使用
 
 ```python
-from hqdata import init_source, get_tick
+from hqdata import init_source, get_tick, get_bar
 
-# 初始化 (凭据从 .env 自动读取)
+# 初始化 Tushare (日线数据)
+init_source("tushare")
+
+# 获取日线数据 (symbol 格式: "代码.交易所")
+df = get_bar("600000.SH", frequency="1d", start_date="2026-04-01", end_date="2026-04-02")
+print(df.head())
+
+# 获取 Tick 数据 (米筐)
 init_source("ricequant")
-
-# 获取Tick数据
-df = get_tick("600000", exchange="XSHG", start_date="2026-04-01", end_date="2026-04-02")
+df = get_tick("600000.XSHG", start_date="2026-04-01", end_date="2026-04-02")
 print(df.head())
 ```
 
-## 交易所代码
+## 股票代码格式
 
-| 交易所 | 代码  | 说明 |
+symbol 参数统一使用 `代码.交易所` 格式：
+
+| 交易所 | 代码  | 示例 |
 | ------ | ----- | ---- |
-| 上交所 | XSHG  | SSE  |
-| 深交所 | XSHE  | SZSE |
+| 上交所 | SH    | `600000.SH` |
+| 深交所 | SZ    | `000001.SZ` |
 
 ## 测试
 
