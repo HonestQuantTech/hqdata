@@ -1,5 +1,6 @@
 """hqdata public API - only entry point for upper layers"""
 
+from datetime import date
 from typing import Literal, Optional
 import pandas as pd
 
@@ -17,37 +18,19 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
     global _source
     if source_type == "ricequant":
         from hqdata.sources.ricequant import RicequantSource
+
         _source = RicequantSource(**kwargs)
     elif source_type == "tushare":
         from hqdata.sources.tushare import TushareSource
+
         _source = TushareSource(**kwargs)
     else:
         raise ValueError(f"Unknown source type: {source_type}")
 
 
-def get_tick(
-    symbol: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> pd.DataFrame:
-    """Get tick data for a stock.
-
-    Args:
-        symbol: Stock symbol with exchange (e.g., "600000.SH" or "000001.SZ")
-        start_date: Start date (e.g., "2024-01-01")
-        end_date: End date (e.g., "2024-01-02")
-
-    Returns:
-        DataFrame with tick data
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    return _source.get_tick(symbol, start_date, end_date)
-
-
 def get_bar(
     symbol: str,
-    frequency: str = "1d",
+    frequency: str = "tick",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:
@@ -55,15 +38,17 @@ def get_bar(
 
     Args:
         symbol: Stock symbol with exchange (e.g., "600000.SH" or "000001.SZ")
-        frequency: Bar frequency ("1d", "1w", "1m", "5m", "60m", etc.)
-        start_date: Start date (e.g., "2024-01-01")
-        end_date: End date (e.g., "2024-01-02")
+        frequency: Bar frequency ("tick", "1min", "5min", "15min", "30min", "60min", "1day", "1week", "1month")
+        start_date: Start date in YYYYMMDD format (defaults to today)
+        end_date: End date in YYYYMMDD format (defaults to today)
 
     Returns:
         DataFrame with bar data
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
+    # Default dates to today
+    today = date.today().strftime("%Y%m%d")
+    start_date = start_date or today
+    end_date = end_date or today
     return _source.get_bar(symbol, frequency, start_date, end_date)
-
-

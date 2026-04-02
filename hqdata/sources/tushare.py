@@ -30,72 +30,45 @@ class TushareSource(BaseSource):
         ts.set_token(token)
         self.pro = ts.pro_api()
 
-    def get_tick(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-    ) -> pd.DataFrame:
-        """Get tick data for a stock.
-
-        Note: Tushare tick data is limited. For historical daily bars, use get_bar().
-
-        Args:
-            symbol: Stock symbol with exchange (e.g., "600000.SH")
-            start_date: Start date (e.g., "2024-01-01")
-            end_date: End date (e.g., "2024-01-02")
-
-        Returns:
-            DataFrame with tick data
-        """
-        df = ts.realtime_quote(ts_symbol=symbol)
-        return df
-
     def get_bar(
         self,
         symbol: str,
-        frequency: str = "1d",
+        frequency: str = "tick",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get K-line/bar data for a stock or index.
+        """Get daily bar data for a stock.
 
         Args:
             symbol: Stock symbol with exchange (e.g., "600000.SH" or "000001.SZ")
-            frequency: Bar frequency ("1d", "1w", "1m", "5m", "15m", "30m", "60m")
-            start_date: Start date (e.g., "20240101" or "2024-01-01")
-            end_date: End date (e.g., "20240102" or "2024-01-02")
+            frequency: Bar frequency ("1day" only, other frequencies not supported)
+            start_date: Start date in YYYYMMDD format
+            end_date: End date in YYYYMMDD format
 
         Returns:
-            DataFrame with bar data including: open, high, low, close, volume, amount
+            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
         """
-        # Tushare pro_bar expects ts_code format (e.g., "600000.SH")
-        freq_map = {
-            "1d": "D",
-            "1w": "W",
-            "1m": "M",
-            "5m": "5",
-            "15m": "15",
-            "30m": "30",
-            "60m": "60",
-        }
-        freq = freq_map.get(frequency, "D")
+        if frequency != "1day":
+            raise NotImplementedError(
+                f"Tushare only supports '1day' frequency, got '{frequency}'"
+            )
 
-        # pro_bar returns daily data when asset='E' (equity/index)
-        df = ts.pro_bar(
+        df = self.pro.daily(
             ts_code=symbol,
-            freq=freq,
-            start_date=start_date.replace("-", "") if start_date else None,
-            end_date=end_date.replace("-", "") if end_date else None,
-            asset="E",
+            start_date=start_date,
+            end_date=end_date,
         )
 
         # Rename columns to standard format
         if df is not None and not df.empty:
-            df = df.rename(columns={
-                "trade_date": "date",
-                "vol": "volume",
-            })
+            df = df.rename(
+                columns={
+                    "ts_code": "symbol",
+                    "trade_date": "date",
+                    "pct_chg": "pct_change",
+                    "vol": "volume",
+                }
+            )
             df = df.sort_values("date")
 
         return df

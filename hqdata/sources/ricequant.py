@@ -47,65 +47,22 @@ class RicequantSource(BaseSource):
             auto_load_plugins=False,
         )
 
-    def get_tick(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-    ) -> pd.DataFrame:
-        """Get tick data for a stock.
-
-        Args:
-            symbol: Stock symbol with exchange (e.g., "600000.XSHG")
-            start_date: Start date (e.g., "2024-01-01")
-            end_date: End date (e.g., "2024-01-02")
-
-        Returns:
-            DataFrame with tick data including:
-            - open, high, low, last (OHLC)
-            - prev_close, limit_up, limit_down
-            - volume, total_turnover
-            - b1-b5, a1-a5 (bid/ask prices)
-            - b1_v-b5_v, a1_v-a5_v (bid/ask volumes)
-        """
-        fields = [
-            "open", "high", "low", "last", "prev_close",
-            "volume", "total_turnover",
-            "limit_up", "limit_down",
-            "b1", "b2", "b3", "b4", "b5",
-            "a1", "a2", "a3", "a4", "a5",
-            "b1_v", "b2_v", "b3_v", "b4_v", "b5_v",
-            "a1_v", "a2_v", "a3_v", "a4_v", "a5_v",
-        ]
-
-        df = get_price(
-            symbol,
-            frequency="tick",
-            fields=fields,
-            start_date=start_date,
-            end_date=end_date,
-            market="cn",  # China stocks require market='cn'
-        )
-        return df
-
     def get_bar(
         self,
         symbol: str,
-        frequency: str = "1d",
+        frequency: str = "tick",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get K-line/bar data for a stock.
 
-        Note: Ricequant tick data only, bar data not implemented yet.
-
         Args:
-            symbol: Stock symbol with exchange (e.g., "600000.XSHG")
-            frequency: Bar frequency ("1d", "1w", "1m", "5m", "60m")
-            start_date: Start date (e.g., "2024-01-01")
-            end_date: End date (e.g., "2024-01-02")
+            symbol: Stock symbol with exchange (e.g., "600000.SH" or "000001.SZ")
+            frequency: Bar frequency ("tick", "1min", "5min", "15min", "30min", "60min", "1day", "1week", "1month")
+            start_date: Start date in YYYYMMDD format
+            end_date: End date in YYYYMMDD format
 
         Returns:
             DataFrame with bar data
         """
-        raise NotImplementedError("Ricequant get_bar not implemented yet. Use Tushare for bar data.")
+        raise NotImplementedError("Ricequant get_bar not implemented yet.")
