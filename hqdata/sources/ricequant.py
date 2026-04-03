@@ -47,6 +47,9 @@ class RicequantSource(BaseSource):
             auto_load_plugins=False,
         )
 
+    def get_stock_list(self, list_status: str = "L") -> pd.DataFrame:
+        raise NotImplementedError("Ricequant get_stock_list not implemented yet.")
+
     def get_bar(
         self,
         symbol: str,

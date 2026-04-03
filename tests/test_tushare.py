@@ -33,6 +33,19 @@ class TestTushareIntegration:
             pytest.skip("TUSHARE_TOKEN not set")
         self.source = TushareSource(token=token)
 
+    def test_get_stock_list(self):
+        """Test get_stock_list returns well-formed data for listed stocks."""
+        df = self.source.get_stock_list(list_status="L")
+        expected_columns = {"symbol", "name", "industry", "market", "exchange",
+                            "curr_type", "list_status", "list_date", "delist_date", "is_hs"}
+        excluded_columns = {"ts_code", "area", "fullname", "enname", "cnspell", "act_name", "act_ent_type"}
+
+        assert not df.empty
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert not excluded_columns.intersection(df.columns), f"Unexpected columns present: {excluded_columns & set(df.columns)}"
+        assert (df["list_status"] == "L").all()
+        assert df["symbol"].is_unique
+
     def test_get_bar(self):
         """Test get_bar returns well-formed data for both markets."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",

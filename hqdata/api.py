@@ -28,6 +28,21 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
         raise ValueError(f"Unknown source type: {source_type}")
 
 
+def get_stock_list(list_status: str = "L") -> pd.DataFrame:
+    """Get basic info for stocks.
+
+    Args:
+        list_status: Listing status — "L" (listed), "D" (delisted), "P" (suspended)
+
+    Returns:
+        DataFrame with columns: symbol, name, industry, market, exchange,
+        curr_type, list_status, list_date, delist_date, is_hs
+    """
+    if _source is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _source.get_stock_list(list_status)
+
+
 def get_bar(
     symbol: str,
     frequency: str = "1day",

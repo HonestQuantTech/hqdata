@@ -38,6 +38,19 @@ class BaseSource(ABC):
         pass
 
     @abstractmethod
+    def get_stock_list(self, list_status: str = "L") -> pd.DataFrame:
+        """Get basic info for stocks.
+
+        Args:
+            list_status: Listing status — "L" (listed), "D" (delisted), "P" (suspended)
+
+        Returns:
+            DataFrame with columns: symbol, name, industry, market, exchange,
+            curr_type, list_status, list_date, delist_date, is_hs
+        """
+        pass
+
+    @abstractmethod
     def get_index_bar(
         self,
         symbol: str,

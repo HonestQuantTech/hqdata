@@ -37,6 +37,22 @@ class TushareSource(BaseSource):
             "pct_chg": "pct_change",
         })
 
+    _STOCK_LIST_FIELDS = (
+        "symbol,name,industry,market,exchange,curr_type,list_status,list_date,delist_date,is_hs"
+    )
+
+    def get_stock_list(self, list_status: str = "L") -> pd.DataFrame:
+        """Get basic info for stocks.
+
+        Args:
+            list_status: Listing status — "L" (listed), "D" (delisted), "P" (suspended)
+
+        Returns:
+            DataFrame with columns: symbol, name, industry, market, exchange,
+            curr_type, list_status, list_date, delist_date, is_hs
+        """
+        return self.pro.stock_basic(list_status=list_status, fields=self._STOCK_LIST_FIELDS)
+
     def get_bar(
         self,
         symbol: str,
