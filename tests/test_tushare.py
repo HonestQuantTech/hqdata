@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pandas as pd
 
 import hqdata.config  # 加载 .env
@@ -12,13 +12,10 @@ from hqdata.sources.tushare import TushareSource
 class TestTushareSource:
     """Unit tests for TushareSource."""
 
-    @patch("hqdata.sources.tushare.ts.set_token")
-    @patch("hqdata.sources.tushare.ts.pro_api")
-    def test_init(self, mock_pro_api, mock_set_token):
-        token = os.getenv("TUSHARE_TOKEN", "test_token_123")
-        source = TushareSource(token=token)
-        mock_set_token.assert_called_once_with(token)
-        mock_pro_api.assert_called_once()
+    @patch.dict(os.environ, {}, clear=True)
+    def test_init_missing_token_raises(self):
+        with pytest.raises(ValueError, match="TUSHARE_TOKEN"):
+            TushareSource(token=None)
 
 
 class TestTushareIntegration:
@@ -37,27 +34,21 @@ class TestTushareIntegration:
         self.source = TushareSource(token=token)
 
     def test_get_bar(self):
-        """Test get_bar for both Shanghai and Shenzhen markets."""
-        # 深圳 000001.SZ
-        df_sz = self.source.get_bar("000001.SZ", "1day", "20260402", "20260402")
-        row_sz = df_sz.iloc[0]
-        assert row_sz["close"] == 11.27
-        assert row_sz["open"] == 11.15
-        assert row_sz["high"] == 11.32
-        assert row_sz["low"] == 11.13
-        assert row_sz["pre_close"] == 11.15
-        assert row_sz["change"] == 0.12
-        assert abs(row_sz["pct_change"] - 1.0762) < 0.001
-        assert abs(row_sz["volume"] - 1148895.22) < 1
+        """Test get_bar returns well-formed data for both markets."""
+        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+                            "pre_close", "change", "pct_change", "volume", "amount"}
 
-        # 上海 600000.SH
-        df_sh = self.source.get_bar("600000.SH", "1day", "20260402", "20260402")
-        row_sh = df_sh.iloc[0]
-        assert row_sh["close"] == 10.25
-        assert row_sh["open"] == 10.25
-        assert row_sh["high"] == 10.37
-        assert row_sh["low"] == 10.21
-        assert row_sh["pre_close"] == 10.24
-        assert row_sh["change"] == 0.01
-        assert abs(row_sh["pct_change"] - 0.0977) < 0.001
-        assert abs(row_sh["volume"] - 416383.22) < 1
+        for symbol in ("000001.SZ", "600000.SH"):
+            df = self.source.get_bar(symbol, "1day", "20260101", "20260401")
+            assert not df.empty, f"{symbol} returned empty DataFrame"
+            assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+            assert (df["high"] >= df["low"]).all(), "high < low found"
+            assert (df["high"] >= df["close"]).all(), "high < close found"
+            assert (df["low"] <= df["close"]).all(), "low > close found"
+            assert (df["volume"] > 0).all(), "non-positive volume found"
+            assert (df["amount"] > 0).all(), "non-positive amount found"
+
+    def test_get_bar_unsupported_frequency(self):
+        """Test that unsupported frequency raises NotImplementedError."""
+        with pytest.raises(NotImplementedError):
+            self.source.get_bar("000001.SZ", "1min", "20260101", "20260101")

@@ -27,16 +27,16 @@ class RicequantSource(BaseSource):
             username: RQData username (email), defaults to RQDATA_USERNAME env var
             password: RQData password/token, defaults to RQDATA_PASSWORD env var
         """
-        import os
-
-        username = username or os.getenv("RQDATA_USERNAME")
-        password = password or os.getenv("RQDATA_PASSWORD")
-
-        if not username or not password:
-            raise ValueError(
-                "RQData credentials not provided. Set username/password in init_source() "
-                "or set RQDATA_USERNAME and RQDATA_PASSWORD environment variables."
-            )
+        username = BaseSource._get_env(
+            username, "RQDATA_USERNAME",
+            "RQData credentials not provided. Set username/password in init_source() "
+            "or set RQDATA_USERNAME and RQDATA_PASSWORD environment variables."
+        )
+        password = BaseSource._get_env(
+            password, "RQDATA_PASSWORD",
+            "RQData credentials not provided. Set username/password in init_source() "
+            "or set RQDATA_USERNAME and RQDATA_PASSWORD environment variables."
+        )
 
         init(
             username,

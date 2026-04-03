@@ -19,7 +19,6 @@ venv/
 # Package managers
 .poetry/
 .pdm.toml
-pyproject.toml
 !pyproject.toml.example
  Hatch/
 PDM/

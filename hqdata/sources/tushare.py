@@ -1,6 +1,5 @@
 """Tushare data source adapter"""
 
-import os
 from typing import Optional
 import pandas as pd
 import tushare as ts
@@ -21,12 +20,11 @@ class TushareSource(BaseSource):
         Args:
             token: Tushare token, defaults to TUSHARE_TOKEN env var
         """
-        token = token or os.getenv("TUSHARE_TOKEN")
-        if not token:
-            raise ValueError(
-                "Tushare token not provided. Set token in init_source() "
-                "or set TUSHARE_TOKEN environment variable."
-            )
+        token = BaseSource._get_env(
+            token, "TUSHARE_TOKEN",
+            "Tushare token not provided. Set token in init_source() "
+            "or set TUSHARE_TOKEN environment variable."
+        )
         ts.set_token(token)
         self.pro = ts.pro_api()
 

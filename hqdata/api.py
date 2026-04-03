@@ -30,7 +30,7 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
 
 def get_bar(
     symbol: str,
-    frequency: str = "tick",
+    frequency: str = "1day",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:

@@ -1,5 +1,6 @@
 """Base class for data sources"""
 
+import os
 from abc import ABC, abstractmethod
 from typing import Optional
 import pandas as pd
@@ -7,6 +8,13 @@ import pandas as pd
 
 class BaseSource(ABC):
     """Abstract base class for data source adapters."""
+
+    @staticmethod
+    def _get_env(param: Optional[str], env_var: str, error_msg: str) -> str:
+        value = param or os.getenv(env_var)
+        if not value:
+            raise ValueError(error_msg)
+        return value
 
     @abstractmethod
     def get_bar(
