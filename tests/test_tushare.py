@@ -52,3 +52,19 @@ class TestTushareIntegration:
         """Test that unsupported frequency raises NotImplementedError."""
         with pytest.raises(NotImplementedError):
             self.source.get_bar("000001.SZ", "1min", "20260101", "20260101")
+
+    def test_get_index_bar(self):
+        """Test get_index_bar returns well-formed data for major indexes."""
+        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+                            "pre_close", "change", "pct_change", "volume", "amount"}
+
+        for symbol in ("000300.SH", "000905.SH", "000852.SH", "932000.CSI"):
+            df = self.source.get_index_bar(symbol, "20260101", "20260401")
+            print(df)
+            assert not df.empty, f"{symbol} returned empty DataFrame"
+            assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+            assert (df["high"] >= df["low"]).all(), "high < low found"
+            assert (df["high"] >= df["close"]).all(), "high < close found"
+            assert (df["low"] <= df["close"]).all(), "low > close found"
+            assert (df["volume"] > 0).all(), "non-positive volume found"
+            assert (df["amount"] > 0).all(), "non-positive amount found"

@@ -28,10 +28,19 @@ class TushareSource(BaseSource):
         ts.set_token(token)
         self.pro = ts.pro_api()
 
+    @staticmethod
+    def _rename_daily_columns(df: pd.DataFrame) -> pd.DataFrame:
+        return df.rename(columns={
+            "ts_code": "symbol",
+            "trade_date": "date",
+            "vol": "volume",
+            "pct_chg": "pct_change",
+        })
+
     def get_bar(
         self,
         symbol: str,
-        frequency: str = "tick",
+        frequency: str = "1day",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
@@ -51,22 +60,32 @@ class TushareSource(BaseSource):
                 f"Tushare only supports '1day' frequency, got '{frequency}'"
             )
 
-        df = self.pro.daily(
-            ts_code=symbol,
-            start_date=start_date,
-            end_date=end_date,
-        )
+        df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
 
-        # Rename columns to standard format
         if df is not None and not df.empty:
-            df = df.rename(
-                columns={
-                    "ts_code": "symbol",
-                    "trade_date": "date",
-                    "pct_chg": "pct_change",
-                    "vol": "volume",
-                }
-            )
-            df = df.sort_values("date")
+            df = self._rename_daily_columns(df).sort_values("date")
+
+        return df
+
+    def get_index_bar(
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get daily bar data for an index.
+
+        Args:
+            symbol: Index code with exchange (e.g., "000001.SH", "399300.SZ")
+            start_date: Start date in YYYYMMDD format
+            end_date: End date in YYYYMMDD format
+
+        Returns:
+            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
+        """
+        df = self.pro.index_daily(ts_code=symbol, start_date=start_date, end_date=end_date)
+
+        if df is not None and not df.empty:
+            df = self._rename_daily_columns(df).sort_values("date")
 
         return df
