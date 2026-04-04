@@ -4,17 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hqdata"
-version = "0.1.0"
+version = "0.1.2"
 description = "A股历史与实时行情数据统一接入、清洗与存储"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "rqdatac>=3.1.4",
-    "tushare>=1.4.29",
+    "pandas>=2.3.3",
     "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
+tushare = [
+    "tushare>=1.4.29",
+]
+ricequant = [
+    "rqdatac>=3.1.4",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

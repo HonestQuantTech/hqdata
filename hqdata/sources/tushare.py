@@ -2,9 +2,14 @@
 
 from typing import Optional
 import pandas as pd
-import tushare as ts
 
 from hqdata.sources.base import BaseSource
+
+
+def _get_tushare():
+    """Lazy import tushare to support optional installation."""
+    import tushare as ts
+    return ts
 
 
 class TushareSource(BaseSource):
@@ -25,6 +30,7 @@ class TushareSource(BaseSource):
             "Tushare token not provided. Set token in init_source() "
             "or set TUSHARE_TOKEN environment variable."
         )
+        ts = _get_tushare()
         ts.set_token(token)
         self.pro = ts.pro_api()
 

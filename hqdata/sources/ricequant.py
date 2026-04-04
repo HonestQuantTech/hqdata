@@ -2,10 +2,15 @@
 
 from typing import Optional
 import pandas as pd
-from rqdatac import init, get_price
-from rqdatac.share.errors import RQDataError
 
 from hqdata.sources.base import BaseSource
+
+
+def _get_rqdatac():
+    """Lazy import rqdatac to support optional installation."""
+    from rqdatac import init, get_price
+    from rqdatac.share.errors import RQDataError
+    return init, get_price, RQDataError
 
 
 class RicequantSource(BaseSource):
@@ -38,6 +43,7 @@ class RicequantSource(BaseSource):
             "or set RQDATA_USERNAME and RQDATA_PASSWORD environment variables."
         )
 
+        init, _, _ = _get_rqdatac()
         init(
             username,
             password,

@@ -1,6 +1,9 @@
-# hqdata
+# hqdata - A股历史与实时行情数据统一接入、清洗与存储
 
-> A股历史与实时行情数据统一接入、清洗与存储
+<p align="center">
+    <img src ="https://img.shields.io/pypi/v/hqdata.svg"/>
+    <img src ="https://img.shields.io/pypi/pyversions/hqdata.svg"/>
+</p>
 
 ## 定位
 
@@ -22,7 +25,22 @@
 
 ## 安装
 
-### 本地开发
+### 方式一：通过pip安装
+
+```bash
+# 基础安装（仅包含核心功能）
+pip install hqdata
+
+# 按需安装数据源依赖
+pip install hqdata[tushare]      # Tushare 支持
+pip install hqdata[ricequant]    # 米筐支持
+pip install hqdata[tushare,ricequant]  # 同时安装两者
+
+# 复制模板并自行填入所需字段
+cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/包安装目录
+```
+
+### 方式二：本地开发
 
 ```bash
 # 创建虚拟环境
@@ -32,22 +50,13 @@ source .venv/bin/activate
 # 安装依赖 (editable 模式，改代码直接生效)
 pip install -e .
 
-# 配置凭据 (复制模板并编辑)
-cp .env.example .env
-# 编辑 .env 填入 RQDATA_USERNAME (米筐) 或 TUSHARE_TOKEN (Tushare)
+# 复制模板并自行填入所需字段
+cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/包安装目录
 ```
 
-### 通过 pip 安装
-
-```bash
-# 从 PyPI 安装 (暂未发布，等待 license 申请完成)
-pip install hqdata
-
-参考 `.env.example` 配置你的 `.env` 文件
-
-python-dotenv 会自动从**运行代码的当前目录**加载 `.env` 文件。
-
 ## 使用
+
+以Tushare数据为例
 
 ```python
 from hqdata import init_source, get_bar
@@ -60,7 +69,7 @@ df = get_bar("600000.SH", frequency="1day", start_date="20260401", end_date="202
 print(df.head())
 ```
 
-## 输入参数格式
+## 输入参数格式说明
 
 ### 股票代码
 
