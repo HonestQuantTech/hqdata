@@ -19,12 +19,7 @@ class TestTushareSource:
 
 
 class TestTushareIntegration:
-    """Integration tests using real Tushare API data.
-
-    Expected data from Tushare for 2026-04-02:
-    - 000001.SZ: open=11.15, high=11.32, low=11.13, close=11.27, pre_close=11.15, change=0.12, pct_change=1.0762, vol=1148895.22, amount=1292756.712
-    - 600000.SH: open=10.25, high=10.37, low=10.21, close=10.25, pre_close=10.24, change=0.01, pct_change=0.0977, vol=416383.22, amount=427990.04
-    """
+    """Integration tests using real Tushare API data."""
 
     @pytest.fixture(autouse=True)
     def setup(self):

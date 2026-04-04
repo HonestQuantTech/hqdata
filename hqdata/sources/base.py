@@ -60,7 +60,7 @@ class BaseSource(ABC):
         """Get daily bar data for an index.
 
         Args:
-            symbol: Index code with exchange (e.g., "000001.SH", "399300.SZ")
+            symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
             start_date: Start date in YYYYMMDD format
             end_date: End date in YYYYMMDD format
 
