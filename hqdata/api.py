@@ -43,7 +43,7 @@ def get_stock_list(list_status: str = "L") -> pd.DataFrame:
     return _source.get_stock_list(list_status)
 
 
-def get_bar(
+def get_stock_bar(
     symbol: str,
     frequency: str = "1day",
     start_date: Optional[str] = None,
@@ -65,7 +65,7 @@ def get_bar(
     today = date.today().strftime("%Y%m%d")
     start_date = start_date or today
     end_date = end_date or today
-    return _source.get_bar(symbol, frequency, start_date, end_date)
+    return _source.get_stock_bar(symbol, frequency, start_date, end_date)
 
 
 def get_index_bar(

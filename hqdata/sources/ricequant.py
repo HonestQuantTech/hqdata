@@ -56,14 +56,14 @@ class RicequantSource(BaseSource):
     def get_stock_list(self, list_status: str = "L") -> pd.DataFrame:
         raise NotImplementedError("Ricequant get_stock_list not implemented yet.")
 
-    def get_bar(
+    def get_stock_bar(
         self,
         symbol: str,
         frequency: str = "1day",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        raise NotImplementedError("Ricequant get_bar not implemented yet.")
+        raise NotImplementedError("Ricequant get_stock_bar not implemented yet.")
 
     def get_index_bar(
         self,

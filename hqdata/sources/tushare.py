@@ -59,7 +59,7 @@ class TushareSource(BaseSource):
         """
         return self.pro.stock_basic(list_status=list_status, fields=self._STOCK_LIST_FIELDS)
 
-    def get_bar(
+    def get_stock_bar(
         self,
         symbol: str,
         frequency: str = "1day",

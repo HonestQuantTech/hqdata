@@ -7,7 +7,7 @@ import pandas as pd
 
 import hqdata.config  # 加载 .env
 from hqdata.sources.tushare import TushareSource
-from hqdata import init_source, get_stock_list, get_bar, get_index_bar
+from hqdata import init_source, get_stock_list, get_stock_bar, get_index_bar
 
 
 class TestTushareSource:
@@ -29,7 +29,7 @@ class TestHqdataPackageImports:
         """Verify __all__ declares all functions importable from hqdata package."""
         import hqdata
 
-        assert set(hqdata.__all__) == {"init_source", "get_stock_list", "get_bar", "get_index_bar"}
+        assert set(hqdata.__all__) == {"init_source", "get_stock_list", "get_stock_bar", "get_index_bar"}
 
 class TestTushareIntegration:
     """Integration tests using real Tushare API data."""
@@ -54,13 +54,13 @@ class TestTushareIntegration:
         assert (df["list_status"] == "L").all()
         assert df["symbol"].is_unique
 
-    def test_get_bar(self):
-        """Test get_bar returns well-formed data for both markets."""
+    def test_get_stock_bar(self):
+        """Test get_stock_bar returns well-formed data for both markets."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
                             "pre_close", "change", "pct_change", "volume", "amount"}
 
         for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_bar(symbol, "1day", "20260101", "20260401")
+            df = self.source.get_stock_bar(symbol, "1day", "20260101", "20260401")
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
             assert (df["high"] >= df["low"]).all(), "high < low found"
@@ -85,7 +85,7 @@ class TestTushareIntegration:
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["amount"] > 0).all(), "non-positive amount found"
 
-    def test_get_bar_unsupported_frequency(self):
+    def test_get_stock_bar_unsupported_frequency(self):
         """Test that unsupported frequency raises NotImplementedError."""
         with pytest.raises(NotImplementedError):
-            self.source.get_bar("000001.SZ", "1min", "20260101", "20260101")
+            self.source.get_stock_bar("000001.SZ", "1min", "20260101", "20260101")

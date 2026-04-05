@@ -28,7 +28,7 @@ class TestRicequantIntegration:
             pytest.skip("RQDATA_USERNAME or RQDATA_PASSWORD not set")
         self.source = RicequantSource(username=token, password=password)
 
-    def test_get_bar_not_implemented(self):
-        """get_bar raises NotImplementedError until Ricequant adapter is implemented."""
+    def test_get_stock_bar_not_implemented(self):
+        """get_stock_bar raises NotImplementedError until Ricequant adapter is implemented."""
         with pytest.raises(NotImplementedError):
-            self.source.get_bar("600000.SH", "1day", "20260101", "20260101")
+            self.source.get_stock_bar("600000.SH", "1day", "20260101", "20260101")

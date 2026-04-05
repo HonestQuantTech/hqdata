@@ -30,7 +30,7 @@ class BaseSource(ABC):
         pass
 
     @abstractmethod
-    def get_bar(
+    def get_stock_bar(
         self,
         symbol: str,
         frequency: str = "1day",
