@@ -61,21 +61,25 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 以 Tushare 为例：
 
 ```python
-from hqdata import init_source, get_stock_list, get_stock_bar, get_index_bar
+from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
 
 # 初始化
 init_source("tushare")
 
 # 查询股票列表
-df = get_stock_list(list_status="L")
-print(f"当前上市股票数量: {len(df)}")
+df = get_stock_list()
+print(df.head())
 
 # 查询日线数据 (symbol 格式: "代码.交易所")
-df = get_stock_bar("600000.SH", frequency="1day", start_date="20260401", end_date="20260402")
+df = get_stock_bar("000001.SZ", frequency="1day", start_date="20260101", end_date="20260401")
+print(df.head())
+
+# 查询指数列表
+df = get_index_list(market="SSE")
 print(df.head())
 
 # 查询指数日线数据
-df = get_index_bar("000300.SH", start_date="20260401", end_date="20260402")
+df = get_index_bar("000300.SH", start_date="20260101", end_date="20260401")
 print(df.head())
 ```
 

@@ -29,7 +29,7 @@ class TestHqdataPackageImports:
         """Verify __all__ declares all functions importable from hqdata package."""
         import hqdata
 
-        assert set(hqdata.__all__) == {"init_source", "get_stock_list", "get_stock_bar", "get_index_bar"}
+        assert set(hqdata.__all__) == {"init_source", "get_stock_list", "get_stock_bar", "get_index_list", "get_index_bar"}
 
 class TestTushareIntegration:
     """Integration tests using real Tushare API data."""
@@ -69,6 +69,24 @@ class TestTushareIntegration:
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["amount"] > 0).all(), "non-positive amount found"
 
+    def test_get_stock_bar_unsupported_frequency(self):
+        """Test that unsupported frequency raises NotImplementedError."""
+        with pytest.raises(NotImplementedError):
+            self.source.get_stock_bar("000001.SZ", "1min", "20260101", "20260101")
+
+    def test_get_index_list(self):
+        """Test get_index_list returns well-formed data for major indexes."""
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+
+        # TODO check with params (e.g., symbol="000300.SH")
+        # TODO check with params (e.g., symbol="000300.SH", market="SSE")
+        # TODO check with params (e.g., symbol="000300.SH", market="CSI")
+
+        df = self.source.get_index_list(market="SSE")
+        assert not df.empty, "get_index_list returned empty DataFrame"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert df["symbol"].str.endswith(".SH").all(), "Expected symbols to end with .SH for SSE market"
+
     def test_get_index_bar(self):
         """Test get_index_bar returns well-formed data for major indexes."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
@@ -85,7 +103,3 @@ class TestTushareIntegration:
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["amount"] > 0).all(), "non-positive amount found"
 
-    def test_get_stock_bar_unsupported_frequency(self):
-        """Test that unsupported frequency raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            self.source.get_stock_bar("000001.SZ", "1min", "20260101", "20260101")

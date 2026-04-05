@@ -38,6 +38,10 @@ def get_stock_list(list_status: str = "L") -> pd.DataFrame:
         DataFrame with columns: symbol, name, industry, market, exchange,
         curr_type, list_status, list_date, delist_date, is_hs
     """
+
+    # TODO more parameters for filtering (e.g., by symbol, exchange, market)
+    # TODO return with date
+
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     return _source.get_stock_list(list_status)
@@ -49,11 +53,11 @@ def get_stock_bar(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Get K-line/bar data for a stock.
+    """Get K-line/bar data for stocks.
 
     Args:
-        symbol: Stock symbol with exchange (e.g., "600000.SH" or "000001.SZ")
-        frequency: Bar frequency ("1day" | "1min" | "5min" | "15min" | "30min" | "60min" | "1week" | "1month")
+        symbol: Stock symbol with exchange (e.g., "000001.SZ" or "000001.SZ,600000.SH")
+        frequency: Bar frequency ("1min" | "5min" | "15min" | "30min" | "60min" | "1day"(default) | "1week" | "1month")
         start_date: Start date in YYYYMMDD format (defaults to today)
         end_date: End date in YYYYMMDD format (defaults to today)
 
@@ -67,6 +71,26 @@ def get_stock_bar(
     end_date = end_date or today
     return _source.get_stock_bar(symbol, frequency, start_date, end_date)
 
+def get_index_list(
+    symbol: Optional[str] = None,
+    market: Optional[str] = None,
+) -> pd.DataFrame:
+    """Get basic info about an index or the index info of a market.
+
+    Args:
+        symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
+        market: Index market (e.g., "CSI", "CICC", "SSE", "SZSE", "SW", "MSCI", "OTH")
+
+    Returns:
+        DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
+    """
+
+    # TODO support multi index query (e.g., "000300.SH,000905.SH")
+    # TODO support multi market query (e.g., "CSI,CICC,SSE,SZSE,SW,MSCI,OTH")
+
+    if _source is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _source.get_index_list(symbol, market)
 
 def get_index_bar(
     symbol: str,
@@ -76,13 +100,16 @@ def get_index_bar(
     """Get daily bar data for an index.
 
     Args:
-        symbol: Index code with exchange (e.g., "000001.SH", "399300.SZ")
+        symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
         start_date: Start date in YYYYMMDD format (defaults to today)
         end_date: End date in YYYYMMDD format (defaults to today)
 
     Returns:
         DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
     """
+
+    # TODO support multi index query (e.g., "000300.SH,000905.SH")
+
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     today = date.today().strftime("%Y%m%d")

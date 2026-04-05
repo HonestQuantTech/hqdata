@@ -15,7 +15,7 @@ def _get_tushare():
 class TushareSource(BaseSource):
     """Tushare data source adapter.
 
-    Requires tushare >= 1.4.0 and valid TUSHARE_TOKEN.
+    Requires tushare >= 1.4.29 and valid TUSHARE_TOKEN.
     Token can be set via environment variable TUSHARE_TOKEN.
     """
 
@@ -35,16 +35,16 @@ class TushareSource(BaseSource):
         self.pro = ts.pro_api()
 
     @staticmethod
-    def _rename_daily_columns(df: pd.DataFrame) -> pd.DataFrame:
+    def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
         return df.rename(columns={
             "ts_code": "symbol",
             "trade_date": "date",
-            "vol": "volume",
             "pct_chg": "pct_change",
+            "vol": "volume",
         })
 
     _STOCK_LIST_FIELDS = (
-        "symbol,name,industry,market,exchange,curr_type,list_status,list_date,delist_date,is_hs"
+        "ts_code,name,industry,market,exchange,curr_type,list_status,list_date,delist_date,is_hs"
     )
 
     def get_stock_list(self, list_status: str = "L") -> pd.DataFrame:
@@ -57,7 +57,12 @@ class TushareSource(BaseSource):
             DataFrame with columns: symbol, name, industry, market, exchange,
             curr_type, list_status, list_date, delist_date, is_hs
         """
-        return self.pro.stock_basic(list_status=list_status, fields=self._STOCK_LIST_FIELDS)
+        df = self.pro.stock_basic(list_status=list_status, fields=self._STOCK_LIST_FIELDS)
+
+        if df is not None and not df.empty:
+            df = self._rename_columns(df).sort_values("symbol")
+
+        return df
 
     def get_stock_bar(
         self,
@@ -66,10 +71,10 @@ class TushareSource(BaseSource):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get daily bar data for a stock.
+        """Get daily bar data for stocks.
 
         Args:
-            symbol: Stock symbol with exchange (e.g., "600000.SH" or "000001.SZ")
+            symbol: Stock symbol with exchange (e.g., "000001.SZ" or "000001.SZ,600000.SH")
             frequency: Bar frequency ("1day" only, other frequencies not supported)
             start_date: Start date in YYYYMMDD format
             end_date: End date in YYYYMMDD format
@@ -85,7 +90,35 @@ class TushareSource(BaseSource):
         df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
 
         if df is not None and not df.empty:
-            df = self._rename_daily_columns(df).sort_values("date")
+            df = self._rename_columns(df).sort_values("date")
+
+        return df
+
+    _INDEX_LIST_FIELDS = (
+        "ts_code,name,fullname,market,base_date,base_point,list_date"
+    )
+
+    def get_index_list(
+        self,
+        symbol: Optional[str] = None,
+        market: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get basic info about an index or the index info of a market.
+
+        Args:
+            symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
+            market: Index market (e.g., "CSI", "CICC", "SSE", "SZSE", "SW", "MSCI", "OTH")
+
+        Returns:
+            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
+        """
+
+        # TODO if symbol is provided, ignore market. if symbol is not provided, market is required. if both are not provided, raise error.
+
+        df = self.pro.index_basic(ts_code=symbol, market=market, fields=self._INDEX_LIST_FIELDS)
+
+        if df is not None and not df.empty:
+            df = self._rename_columns(df).sort_values("symbol")
 
         return df
 
@@ -108,6 +141,6 @@ class TushareSource(BaseSource):
         df = self.pro.index_daily(ts_code=symbol, start_date=start_date, end_date=end_date)
 
         if df is not None and not df.empty:
-            df = self._rename_daily_columns(df).sort_values("date")
+            df = self._rename_columns(df).sort_values("date")
 
         return df
