@@ -7,6 +7,7 @@ import pandas as pd
 
 import hqdata.config  # 加载 .env
 from hqdata.sources.tushare import TushareSource
+from hqdata import init_source, get_stock_list, get_bar, get_index_bar
 
 
 class TestTushareSource:
@@ -17,6 +18,18 @@ class TestTushareSource:
         with pytest.raises(ValueError, match="TUSHARE_TOKEN"):
             TushareSource(token=None)
 
+class TestHqdataPackageImports:
+    """Test that hqdata package exposes all public APIs correctly.
+
+    This ensures users who install via pip (importing from the installed package)
+    get all documented functions.
+    """
+
+    def test_all_public_apis_match_all(self):
+        """Verify __all__ declares all functions importable from hqdata package."""
+        import hqdata
+
+        assert set(hqdata.__all__) == {"init_source", "get_stock_list", "get_bar", "get_index_bar"}
 
 class TestTushareIntegration:
     """Integration tests using real Tushare API data."""
@@ -56,11 +69,6 @@ class TestTushareIntegration:
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["amount"] > 0).all(), "non-positive amount found"
 
-    def test_get_bar_unsupported_frequency(self):
-        """Test that unsupported frequency raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            self.source.get_bar("000001.SZ", "1min", "20260101", "20260101")
-
     def test_get_index_bar(self):
         """Test get_index_bar returns well-formed data for major indexes."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
@@ -76,3 +84,8 @@ class TestTushareIntegration:
             assert (df["low"] <= df["close"]).all(), "low > close found"
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["amount"] > 0).all(), "non-positive amount found"
+
+    def test_get_bar_unsupported_frequency(self):
+        """Test that unsupported frequency raises NotImplementedError."""
+        with pytest.raises(NotImplementedError):
+            self.source.get_bar("000001.SZ", "1min", "20260101", "20260101")

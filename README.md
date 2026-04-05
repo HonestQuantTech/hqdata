@@ -56,17 +56,32 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 
 ## 使用
 
-以Tushare数据为例
+以 Tushare 为例：
 
 ```python
-from hqdata import init_source, get_bar
+from hqdata import init_source, get_stock_list, get_bar, get_index_bar
 
-# 初始化 Tushare (日线数据)
+# 初始化
 init_source("tushare")
 
-# 获取日线数据 (symbol 格式: "代码.交易所")
+# 查询股票列表
+df = get_stock_list(list_status="L")
+print(f"当前上市股票数量: {len(df)}")
+
+# 查询日线数据 (symbol 格式: "代码.交易所")
 df = get_bar("600000.SH", frequency="1day", start_date="20260401", end_date="20260402")
 print(df.head())
+
+# 查询指数日线数据
+df = get_index_bar("000300.SH", start_date="20260401", end_date="20260402")
+print(df.head())
+```
+
+## 测试
+
+```bash
+pytest tests/ -v
+pytest tests/test_tushare.py::TestTushareIntegration::test_get_bar  # 运行单个测试
 ```
 
 ## 输入参数格式说明
@@ -79,10 +94,3 @@ symbol 参数统一使用 `代码.交易所` 格式：
 | ------ | ---- | ----------- |
 | 上交所 | SH   | `600000.SH` |
 | 深交所 | SZ   | `000001.SZ` |
-
-## 测试
-
-```bash
-pytest tests/ -v
-pytest tests/test_tushare.py::TestTushareIntegration::test_get_bar  # 运行单个测试
-```
