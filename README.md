@@ -1,8 +1,10 @@
 # hqdata - A股历史与实时行情数据统一接入、清洗与存储
 
 <p align="center">
-    <img src ="https://img.shields.io/pypi/v/hqdata.svg"/>
-    <img src ="https://img.shields.io/pypi/pyversions/hqdata.svg"/>
+    <img src="https://img.shields.io/pypi/v/hqdata.svg"/>
+    <img src="https://img.shields.io/pypi/pyversions/hqdata.svg"/>
+    <img src="https://img.shields.io/badge/tushare-%3E%3D1.4.29-blue"/>
+    <img src="https://img.shields.io/badge/rqdatac-%3E%3D3.1.4-blue"/>
 </p>
 
 ## 定位

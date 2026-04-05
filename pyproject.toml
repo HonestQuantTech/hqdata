@@ -4,14 +4,47 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hqdata"
-version = "0.1.3"
+version = "0.1.4"
 description = "A股历史与实时行情数据统一接入、清洗与存储"
 readme = "README.md"
+authors = [
+  { name="HowieMen", email="howiemen@honestquant.com" },
+]
 requires-python = ">=3.10"
 dependencies = [
-    "pandas>=2.3.3",
+    "pandas>=2.0.0",
     "python-dotenv>=1.0.0",
 ]
+license = { text = "MIT" }
+keywords = [
+	"hqdata",
+    "quant",
+    "quantitative",
+    "investment",
+    "trading",
+    "algotrading",
+	"tushare",
+	"ricequant",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",          # 早期阶段
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.urls]
+Homepage = "https://honestquant.com/hqdata"
+Source = "https://github.com/HonestQuantTech/hqdata"
 
 [project.optional-dependencies]
 tushare = [
