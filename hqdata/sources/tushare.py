@@ -16,6 +16,8 @@ def _get_tushare():
 class _RateLimiter:
     """Sliding window rate limiter for API calls."""
 
+    # TODO 在tushare的所有实现里加入acquire的等待
+
     def __init__(self, max_calls: int = 200, window_seconds: float = 60.0):
         self.max_calls = max_calls
         self.window_seconds = window_seconds
@@ -136,21 +138,44 @@ class TushareSource(BaseSource):
         """Get basic info about an index or the index info of a market.
 
         Args:
-            symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
-            market: Index market (e.g., "CSI", "CICC", "SSE", "SZSE", "SW", "MSCI", "OTH")
+            symbol: Index code with exchange, supports comma-separated multiple codes (e.g., "000300.SH" or "000300.SH,000905.SH")
+            market: Index market, supports comma-separated multiple markets (e.g., "CSI" or "CSI,CICC,SSE,SZSE,SW,MSCI,OTH")
 
         Returns:
             DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
         """
+        # Determine whether to query by symbol or by market
+        # If symbol is provided (even as comma-separated list), ignore market
+        # If symbol is not provided, market must be provided
+        use_symbol = symbol and symbol.strip()
+        use_market = market and market.strip() if not use_symbol else None
 
-        # TODO if symbol is provided, ignore market. if symbol is not provided, market is required. if both are not provided, raise error.
+        if not use_symbol and not use_market:
+            raise ValueError("At least one of symbol or market must be provided")
 
-        df = self.pro.index_basic(ts_code=symbol, market=market, fields=self._INDEX_LIST_FIELDS)
+        if use_symbol:
+            symbols = [s.strip() for s in symbol.split(",")]
+            dfs = []
+            for s in symbols:
+                self._rate_limiter.acquire()
+                df = self.pro.index_basic(ts_code=s, fields=self._INDEX_LIST_FIELDS)
+                if df is not None and not df.empty:
+                    dfs.append(df)
+            df = pd.concat(dfs, ignore_index=True) if dfs else None
+        else:
+            markets = [m.strip() for m in market.split(",")]
+            dfs = []
+            for m in markets:
+                self._rate_limiter.acquire()
+                df = self.pro.index_basic(market=m, fields=self._INDEX_LIST_FIELDS)
+                if df is not None and not df.empty:
+                    dfs.append(df)
+            df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is not None and not df.empty:
             df = self._rename_columns(df).sort_values("symbol")
 
-        return df
+        return df if df is not None else pd.DataFrame()
 
     def get_index_bar(
         self,

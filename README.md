@@ -67,22 +67,21 @@ from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, g
 init_source("tushare")
 
 # 查询股票列表
-df = get_stock_list()
-print(df.head())
+get_stock_list()
 
 # 查询日线数据 (symbol 格式: "代码.交易所")
-df = get_stock_bar("000001.SZ", frequency="1day", start_date="20260101", end_date="20260401")
-print(df.head())
+get_stock_bar("000001.SZ", frequency="1day", start_date="20260101", end_date="20260401")
 
 # 查询指数列表
-df = get_index_list(market="SSE")
-print(df.head())
+get_index_list(symbol="000300.SH")
+get_index_list(symbol="000300.SH,000905.SH")
+get_index_list(market="SSE")
+get_index_list(market="SSE,SZSE")
+get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market, 只有symbol字段会生效
 
 # 查询指数日线数据
-df = get_index_bar("000300.SH", start_date="20260101", end_date="20260401")
-print(df.head())
-df = get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
-print(df.head())
+get_index_bar("000300.SH", start_date="20260101", end_date="20260401")
+get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
 ```
 
 ## 测试

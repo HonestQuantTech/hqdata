@@ -59,8 +59,8 @@ class BaseSource(ABC):
         """Get basic info about an index or the index info of a market.
 
         Args:
-            symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
-            market: Index market (e.g., "CSI", "CICC", "SSE", "SZSE", "SW", "MSCI", "OTH")   
+            symbol: Index code with exchange, supports comma-separated multiple codes (e.g., "000300.SH" or "000300.SH,000905.SH"). If provided, market is ignored.
+            market: Index market, supports comma-separated multiple markets (e.g., "CSI" or "CSI,CICC,SSE,SZSE,SW,MSCI,OTH"). Required if symbol is not provided.
 
         Returns:
             DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date

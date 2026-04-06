@@ -7,7 +7,7 @@ import pandas as pd
 
 import hqdata.config  # 加载 .env
 from hqdata.sources.tushare import TushareSource
-from hqdata import init_source, get_stock_list, get_stock_bar, get_index_bar
+from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
 
 
 class TestTushareSource:
@@ -74,20 +74,65 @@ class TestTushareIntegration:
         with pytest.raises(NotImplementedError):
             self.source.get_stock_bar("000001.SZ", "1min", "20260101", "20260101")
 
-    def test_get_index_list(self):
-        """Test get_index_list returns well-formed data for major indexes."""
+    def test_get_index_list_single_symbol(self):
+        """Test get_index_list with single symbol."""
         expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
 
-        # TODO check with params (e.g., symbol="000300.SH")
-        # TODO check with params (e.g., symbol="000300.SH", market="SSE")
-        # TODO check with params (e.g., symbol="000300.SH", market="CSI")
+        df = self.source.get_index_list(symbol="000300.SH")
+        assert not df.empty, "get_index_list returned empty DataFrame for single symbol"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert len(df) == 1, f"Expected single index, got {len(df)} rows"
+        assert df.iloc[0]["symbol"] == "000300.SH"
+
+    def test_get_index_list_multiple_symbols(self):
+        """Test get_index_list with comma-separated multiple symbols."""
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+
+        symbols = "000300.SH,000905.SH"
+        df = self.source.get_index_list(symbol=symbols)
+        assert not df.empty, f"get_index_list returned empty DataFrame for {symbols}"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert set(df["symbol"].unique()) == {"000300.SH", "000905.SH"}, f"Expected symbols in result: {symbols}"
+
+    def test_get_index_list_single_market(self):
+        """Test get_index_list with single market."""
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
 
         df = self.source.get_index_list(market="SSE")
-        assert not df.empty, "get_index_list returned empty DataFrame"
+        assert not df.empty, "get_index_list returned empty DataFrame for SSE market"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
         assert df["symbol"].str.endswith(".SH").all(), "Expected symbols to end with .SH for SSE market"
 
-    def test_get_index_bar(self):
+    def test_get_index_list_multiple_markets(self):
+        """Test get_index_list with comma-separated multiple markets."""
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+
+        markets = "SSE,SZSE"
+        df = self.source.get_index_list(market=markets)
+        assert not df.empty, f"get_index_list returned empty DataFrame for {markets}"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        # Result should contain both SSE and SZSE symbols
+        has_sh = df["symbol"].str.endswith(".SH").any()
+        has_sz = df["symbol"].str.endswith(".SZ").any()
+        assert has_sh and has_sz, f"Expected both .SH and .SZ symbols in result for markets: {markets}"
+
+    def test_get_index_list_symbol_ignores_market(self):
+        """Test that symbol takes precedence over market (market is ignored when symbol is provided)."""
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+
+        # When symbol is provided, market should be ignored
+        df = self.source.get_index_list(symbol="000300.SH", market="SZSE")
+        assert not df.empty, "get_index_list returned empty DataFrame when symbol is provided"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert len(df) == 1, f"Expected single index when symbol provided, got {len(df)} rows"
+        assert df.iloc[0]["symbol"] == "000300.SH", "Expected 000300.SH result when symbol is provided"
+
+    def test_get_index_list_error_without_params(self):
+        """Test that ValueError is raised when neither symbol nor market is provided."""
+        with pytest.raises(ValueError, match="At least one of symbol or market must be provided"):
+            self.source.get_index_list()
+
+    def test_get_index_bar_single_symbol(self):
         """Test get_index_bar returns well-formed data for major indexes."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
                             "pre_close", "change", "pct_change", "volume", "amount"}
@@ -103,7 +148,7 @@ class TestTushareIntegration:
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["amount"] > 0).all(), "non-positive amount found"
 
-    def test_get_indexes_bar(self):
+    def test_get_index_bar_multiple_symbols(self):
         """Test get_index_bar returns well-formed data for multiple indexes."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
                             "pre_close", "change", "pct_change", "volume", "amount"}
