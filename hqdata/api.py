@@ -97,18 +97,16 @@ def get_index_bar(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Get daily bar data for an index.
+    """Get daily bar data for an index or multiple indexes.
 
     Args:
-        symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
+        symbol: Index code with exchange, supports comma-separated multiple codes (e.g., "000300.SH" or "000300.SH,000905.SH")
         start_date: Start date in YYYYMMDD format (defaults to today)
         end_date: End date in YYYYMMDD format (defaults to today)
 
     Returns:
         DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
     """
-
-    # TODO support multi index query (e.g., "000300.SH,000905.SH")
 
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")

@@ -81,6 +81,8 @@ print(df.head())
 # 查询指数日线数据
 df = get_index_bar("000300.SH", start_date="20260101", end_date="20260401")
 print(df.head())
+df = get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
+print(df.head())
 ```
 
 ## 测试

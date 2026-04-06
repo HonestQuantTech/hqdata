@@ -1,5 +1,7 @@
 """Tushare data source adapter"""
 
+import time
+from collections import deque
 from typing import Optional
 import pandas as pd
 
@@ -11,6 +13,29 @@ def _get_tushare():
     import tushare as ts
     return ts
 
+class _RateLimiter:
+    """Sliding window rate limiter for API calls."""
+
+    def __init__(self, max_calls: int = 200, window_seconds: float = 60.0):
+        self.max_calls = max_calls
+        self.window_seconds = window_seconds
+        self._timestamps: deque[float] = deque()
+
+    def acquire(self) -> None:
+        """Block until a call slot is available."""
+        while True:
+            now = time.time()
+            cutoff = now - self.window_seconds
+            while self._timestamps and self._timestamps[0] < cutoff:
+                self._timestamps.popleft()
+
+            if len(self._timestamps) < self.max_calls:
+                self._timestamps.append(now)
+                return
+
+            sleep_time = self._timestamps[0] + self.window_seconds - now + 0.01
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
 class TushareSource(BaseSource):
     """Tushare data source adapter.
@@ -18,6 +43,11 @@ class TushareSource(BaseSource):
     Requires tushare >= 1.4.29 and valid TUSHARE_TOKEN.
     Token can be set via environment variable TUSHARE_TOKEN.
     """
+
+
+    # Tushare API allows 200 calls per minute(2000积分以上)
+    # Tushare API allows 500 calls per minute(5000积分以上)
+    _rate_limiter = _RateLimiter(max_calls=200, window_seconds=60.0)
 
     def __init__(self, token: Optional[str] = None):
         """Initialize tushare connection.
@@ -131,16 +161,28 @@ class TushareSource(BaseSource):
         """Get daily bar data for an index.
 
         Args:
-            symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
+            symbol: Index code with exchange, supports comma-separated multiple codes (e.g., "000300.SH,000905.SH")
             start_date: Start date in YYYYMMDD format
             end_date: End date in YYYYMMDD format
 
         Returns:
             DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
         """
-        df = self.pro.index_daily(ts_code=symbol, start_date=start_date, end_date=end_date)
+        symbols = [s.strip() for s in symbol.split(",")]
+
+        if len(symbols) == 1:
+            self._rate_limiter.acquire()
+            df = self.pro.index_daily(ts_code=symbols[0], start_date=start_date, end_date=end_date)
+        else:
+            dfs = []
+            for s in symbols:
+                self._rate_limiter.acquire()
+                df = self.pro.index_daily(ts_code=s, start_date=start_date, end_date=end_date)
+                if df is not None and not df.empty:
+                    dfs.append(df)
+            df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is not None and not df.empty:
-            df = self._rename_columns(df).sort_values("date")
+            df = self._rename_columns(df).sort_values(["symbol", "date"])
 
-        return df
+        return df if df is not None else pd.DataFrame()

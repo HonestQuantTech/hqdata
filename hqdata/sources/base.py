@@ -74,10 +74,10 @@ class BaseSource(ABC):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get daily bar data for an index.
+        """Get daily bar data for an index or multiple indexes.
 
         Args:
-            symbol: Index code with exchange (e.g., "000300.SH", "000905.SH")
+            symbol: Index code with exchange, supports comma-separated multiple codes (e.g., "000300.SH" or "000300.SH,000905.SH")
             start_date: Start date in YYYYMMDD format
             end_date: End date in YYYYMMDD format
 

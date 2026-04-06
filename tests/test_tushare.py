@@ -103,3 +103,14 @@ class TestTushareIntegration:
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["amount"] > 0).all(), "non-positive amount found"
 
+    def test_get_indexes_bar(self):
+        """Test get_index_bar returns well-formed data for multiple indexes."""
+        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+                            "pre_close", "change", "pct_change", "volume", "amount"}
+
+        symbols = "000300.SH,000905.SH"
+        df = self.source.get_index_bar(symbols, "20260101", "20260401")
+        assert not df.empty, f"{symbols} returned empty DataFrame"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert set(df["symbol"].unique()) == {"000300.SH", "000905.SH"}, f"Expected symbols in result: {symbols}"
+
