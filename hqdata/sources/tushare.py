@@ -17,8 +17,6 @@ def _get_tushare():
 class _RateLimiter:
     """Sliding window rate limiter for API calls."""
 
-    # TODO 在tushare的所有实现里加入acquire的等待
-
     def __init__(self, max_calls: int = 200, window_seconds: float = 60.0):
         self.max_calls = max_calls
         self.window_seconds = window_seconds
@@ -50,6 +48,8 @@ class TushareSource(BaseSource):
 
     # Tushare API allows 200 calls per minute(2000积分以上)
     # Tushare API allows 500 calls per minute(5000积分以上)
+    # Shared across all instances (class-level) so multiple TushareSource objects
+    # respect the same global rate limit — intentional singleton-style design.
     _rate_limiter = _RateLimiter(max_calls=200, window_seconds=60.0)
 
     def __init__(self, token: Optional[str] = None):
@@ -147,7 +147,7 @@ class TushareSource(BaseSource):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get daily bar data for stocks.
+        """Get K-line/bar data for stocks.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
@@ -244,18 +244,13 @@ class TushareSource(BaseSource):
             DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
         """
         symbols = [s.strip() for s in symbol.split(",")]
-
-        if len(symbols) == 1:
+        dfs = []
+        for s in symbols:
             self._rate_limiter.acquire()
-            df = self.pro.index_daily(ts_code=symbols[0], start_date=start_date, end_date=end_date)
-        else:
-            dfs = []
-            for s in symbols:
-                self._rate_limiter.acquire()
-                df = self.pro.index_daily(ts_code=s, start_date=start_date, end_date=end_date)
-                if df is not None and not df.empty:
-                    dfs.append(df)
-            df = pd.concat(dfs, ignore_index=True) if dfs else None
+            d = self.pro.index_daily(ts_code=s, start_date=start_date, end_date=end_date)
+            if d is not None and not d.empty:
+                dfs.append(d)
+        df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:
             columns = ["symbol", "date", "open", "high", "low", "close", "pre_close", "change", "pct_change", "volume", "amount"]

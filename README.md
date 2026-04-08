@@ -98,7 +98,7 @@ get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
 
 ```bash
 pytest tests/ -v # 运行全部测试
-pytest tests/test_tushare.py::TestTushareIntegration::test_get_stock_bar  # 运行单个测试
+pytest tests/test_tushare.py::TestTushareIntegration::test_get_stock_bar_single_symbol  # 运行单个测试
 ```
 
 ## 输入参数说明

@@ -73,9 +73,9 @@ class RicequantSource(BaseSource):
         raise NotImplementedError("Ricequant get_stock_bar not implemented yet.")
 
     def get_index_list(
-        self, 
-        symbol: str | None = None, 
-        market: str | None = None
+        self,
+        symbol: Optional[str] = None,
+        market: Optional[str] = None,
     ) -> pd.DataFrame:
         raise NotImplementedError("Ricequant get_index_list not implemented yet.")
 

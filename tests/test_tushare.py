@@ -91,10 +91,10 @@ class TestTushareIntegration:
         """Test get_stock_list with comma-separated multiple markets."""
         df = self.source.get_stock_list(market="MB,GEM,STAR")
         assert not df.empty, "get_stock_list returned empty DataFrame for multiple markets"
-        has_star = df["market"].str.contains("MB").any()
+        has_mb = df["market"].str.contains("MB").any()
         has_gem = df["market"].str.contains("GEM").any()
-        has_gem = df["market"].str.contains("STAR").any()
-        assert has_star and has_gem, "Expected both MB&GEM&STAR in results"
+        has_star = df["market"].str.contains("STAR").any()
+        assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
 
     def test_get_stock_list_by_list_status(self):
         """Test get_stock_list with list_status filter (D)."""
