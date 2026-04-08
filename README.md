@@ -66,11 +66,21 @@ from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, g
 # 初始化
 init_source("tushare")
 
-# 查询股票列表
-get_stock_list()
+# 查询股票列表 (支持5种过滤参数)
+get_stock_list() # 等同于get_stock_list(list_status="L")
+get_stock_list(symbol="000001.SZ")
+get_stock_list(symbol="000001.SZ,600000.SH")
+get_stock_list(exchange="SSE")
+get_stock_list(exchange="SSE,SZSE")
+get_stock_list(market="MB")
+get_stock_list(market="MB,GEM,STAR")
+get_stock_list(list_status="D")
+get_stock_list(is_hs="N")
+get_stock_list(market="MB", list_status="D")
 
-# 查询日线数据 (symbol 格式: "代码.交易所")
-get_stock_bar("000001.SZ", frequency="1day", start_date="20260101", end_date="20260401")
+# 查询股票日线数据
+get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
+get_stock_bar("000001.SZ,600000.SH", frequency="day", start_date="20260101", end_date="20260401")
 
 # 查询指数列表
 get_index_list(symbol="000300.SH")
@@ -87,17 +97,67 @@ get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
 ## 测试
 
 ```bash
-pytest tests/ -v
+pytest tests/ -v # 运行全部测试
 pytest tests/test_tushare.py::TestTushareIntegration::test_get_stock_bar  # 运行单个测试
 ```
 
-## 输入参数格式说明
+## 输入参数说明
 
-### 股票代码
+### symbol（股票代码）
 
-symbol 参数统一使用 `代码.交易所` 格式：
+symbol 参数统一使用 `交易所简写代码` 作为后缀：
 
-| 交易所 | 代码 | 示例        |
-| ------ | ---- | ----------- |
-| 上交所 | SH   | `600000.SH` |
-| 深交所 | SZ   | `000001.SZ` |
+| 交易所 | 交易所简写代码 | 示例        |
+| ------ | -------------- | ----------- |
+| 上交所 | SH             | `600000.SH` |
+| 深交所 | SZ             | `000001.SZ` |
+
+### start_date / end_date（日期区间）
+
+日期格式为 `YYYYMMDD`，如 `20260401` 表示 2026年4月1日。
+
+- `start_date`：开始日期（包含）
+- `end_date`：结束日期（包含）
+
+### frequency（频率）
+
+| 值      | 说明         |
+| ------- | ------------ |
+| `tick`  | 实时         |
+| `1m`    | 1分钟线      |
+| `5m`    | 5分钟线      |
+| `15m`   | 15分钟线     |
+| `30m`   | 30分钟线     |
+| `60m`   | 60分钟线     |
+| `day`   | 日线（默认） |
+| `week`  | 周线         |
+| `month` | 月线         |
+
+### exchange（交易所）
+
+| 交易所 | 代码 | 说明           |
+| ------ | ---- | -------------- |
+| 上交所 | SSE  | 上海证券交易所 |
+| 深交所 | SZSE | 深圳证券交易所 |
+| 北交所 | BSE  | 北京证券交易所 |
+
+### list_status（上市状态）
+
+| 值  | 说明         |
+| --- | ------------ |
+| `L` | 上市（默认） |
+| `D` | 退市         |
+| `P` | 暂停上市     |
+| `G` | 过会未交易   |
+
+### is_hs（是否沪深港通标的）
+
+| 值  | 说明   |
+| --- | ------ |
+| `H` | 沪股通 |
+| `S` | 深股通 |
+| `N` | 否     |
+
+### market（市场板块）
+
+market 参数需根据具体接口确定，参见各接口说明。

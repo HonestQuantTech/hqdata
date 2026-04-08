@@ -53,22 +53,29 @@ class RicequantSource(BaseSource):
             auto_load_plugins=False,
         )
 
-    def get_stock_list(self, list_status: str = "L") -> pd.DataFrame:
+    def get_stock_list(
+        self,
+        symbol: Optional[str] = None,
+        exchange: Optional[str] = None,
+        market: Optional[str] = None,
+        list_status: str = "L",
+        is_hs: Optional[str] = None,
+    ) -> pd.DataFrame:
         raise NotImplementedError("Ricequant get_stock_list not implemented yet.")
 
     def get_stock_bar(
         self,
         symbol: str,
-        frequency: str = "1day",
+        frequency: str = "day",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
         raise NotImplementedError("Ricequant get_stock_bar not implemented yet.")
 
     def get_index_list(
-            self, 
-            symbol: str | None = None, 
-            market: str | None = None
+        self, 
+        symbol: str | None = None, 
+        market: str | None = None
     ) -> pd.DataFrame:
         raise NotImplementedError("Ricequant get_index_list not implemented yet.")
 

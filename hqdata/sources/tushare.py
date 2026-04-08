@@ -1,6 +1,7 @@
 """Tushare data source adapter"""
 
 import time
+from datetime import date
 from collections import deque
 from typing import Optional
 import pandas as pd
@@ -75,55 +76,100 @@ class TushareSource(BaseSource):
             "vol": "volume",
         })
 
+    _MARKET_MAP = {
+        "MB": "主板",
+        "GEM": "创业板",
+        "STAR": "科创板",
+        "BJ": "北交所",
+    }
+    _REVERSE_MARKET_MAP = {v: k for k, v in _MARKET_MAP.items()}
     _STOCK_LIST_FIELDS = (
         "ts_code,name,industry,market,exchange,curr_type,list_status,list_date,delist_date,is_hs"
     )
 
-    def get_stock_list(self, list_status: str = "L") -> pd.DataFrame:
+    def get_stock_list(
+        self,
+        symbol: Optional[str] = None,
+        exchange: Optional[str] = None,
+        market: Optional[str] = None,
+        list_status: str = "L",
+        is_hs: Optional[str] = None,
+    ) -> pd.DataFrame:
         """Get basic info for stocks.
 
         Args:
-            list_status: Listing status — "L" (listed), "D" (delisted), "P" (suspended)
+            symbol: see README, supports comma-separated multiple codes
+            exchange: see README, supports comma-separated multiple exchanges
+            market: Market category，supports comma-separated multiple codes
+            list_status: see README
+            is_hs: see README
 
+        Special:
+            market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
+            
         Returns:
             DataFrame with columns: symbol, name, industry, market, exchange,
-            curr_type, list_status, list_date, delist_date, is_hs
+            curr_type, list_status, list_date, delist_date, is_hs, date
         """
-        df = self.pro.stock_basic(list_status=list_status, fields=self._STOCK_LIST_FIELDS)
+        # Map English market abbreviations to Chinese names for tushare API
+        if market:
+            # Check if market is an abbreviation that needs mapping
+            market_names = []
+            for m in market.split(","):
+                m = m.strip()
+                market_names.append(self._MARKET_MAP.get(m, m))
+            market = ",".join(market_names)
 
-        if df is not None and not df.empty:
-            df = self._rename_columns(df).sort_values("symbol")
+        self._rate_limiter.acquire()
+        df = self.pro.stock_basic(
+            ts_code=symbol,
+            exchange=exchange,
+            market=market,
+            list_status=list_status,
+            is_hs=is_hs,
+            fields=self._STOCK_LIST_FIELDS,
+        )
 
+        if df is None or df.empty:
+            columns = ["symbol", "name", "industry", "market", "exchange",
+                      "curr_type", "list_status", "list_date", "delist_date", "is_hs", "date"]
+            return pd.DataFrame(columns=columns)
+        df = self._rename_columns(df).sort_values("symbol")
+        df["date"] = date.today().strftime("%Y%m%d")
+        # Convert market values from Chinese to English abbreviations
+        df["market"] = df["market"].map(lambda x: self._REVERSE_MARKET_MAP.get(x, x))
         return df
 
     def get_stock_bar(
         self,
         symbol: str,
-        frequency: str = "1day",
+        frequency: str = "day",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get daily bar data for stocks.
 
         Args:
-            symbol: Stock symbol with exchange (e.g., "000001.SZ" or "000001.SZ,600000.SH")
-            frequency: Bar frequency ("1day" only, other frequencies not supported)
-            start_date: Start date in YYYYMMDD format
-            end_date: End date in YYYYMMDD format
+            symbol: see README, supports comma-separated multiple codes
+            frequency: see README
+            start_date: see README
+            end_date: see README
 
         Returns:
             DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
         """
-        if frequency != "1day":
+        if frequency != "day":
             raise NotImplementedError(
-                f"Tushare only supports '1day' frequency, got '{frequency}'"
+                f"Tushare only supports 'day' frequency, got '{frequency}'"
             )
 
+        self._rate_limiter.acquire()
         df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
 
-        if df is not None and not df.empty:
-            df = self._rename_columns(df).sort_values("date")
-
+        if df is None or df.empty:
+            columns = ["symbol", "date", "open", "high", "low", "close", "pre_close", "change", "pct_change", "volume", "amount"]
+            return pd.DataFrame(columns=columns)
+        df = self._rename_columns(df).sort_values(["symbol", "date"])
         return df
 
     _INDEX_LIST_FIELDS = (
@@ -138,9 +184,12 @@ class TushareSource(BaseSource):
         """Get basic info about an index or the index info of a market.
 
         Args:
-            symbol: Index code with exchange, supports comma-separated multiple codes (e.g., "000300.SH" or "000300.SH,000905.SH")
-            market: Index market, supports comma-separated multiple markets (e.g., "CSI" or "CSI,CICC,SSE,SZSE,SW,MSCI,OTH")
+            symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
+            market: see README, supports comma-separated multiple markets. Required if symbol is not provided.
 
+        Special:
+            market: CSI(中证指数),CICC(中金指数),SSE(上交所指数),SZSE(深交所指数),SW(申万指数),MSCI(MSCI指数),OTH(其他指数)
+            
         Returns:
             DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
         """
@@ -172,10 +221,11 @@ class TushareSource(BaseSource):
                     dfs.append(df)
             df = pd.concat(dfs, ignore_index=True) if dfs else None
 
-        if df is not None and not df.empty:
-            df = self._rename_columns(df).sort_values("symbol")
-
-        return df if df is not None else pd.DataFrame()
+        if df is None or df.empty:
+            columns = ["symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"]
+            return pd.DataFrame(columns=columns)
+        df = self._rename_columns(df).sort_values("symbol")
+        return df
 
     def get_index_bar(
         self,
@@ -186,9 +236,9 @@ class TushareSource(BaseSource):
         """Get daily bar data for an index.
 
         Args:
-            symbol: Index code with exchange, supports comma-separated multiple codes (e.g., "000300.SH,000905.SH")
-            start_date: Start date in YYYYMMDD format
-            end_date: End date in YYYYMMDD format
+            symbol: see README, supports comma-separated multiple codes
+            start_date: see README
+            end_date: see README
 
         Returns:
             DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
@@ -207,7 +257,8 @@ class TushareSource(BaseSource):
                     dfs.append(df)
             df = pd.concat(dfs, ignore_index=True) if dfs else None
 
-        if df is not None and not df.empty:
-            df = self._rename_columns(df).sort_values(["symbol", "date"])
-
-        return df if df is not None else pd.DataFrame()
+        if df is None or df.empty:
+            columns = ["symbol", "date", "open", "high", "low", "close", "pre_close", "change", "pct_change", "volume", "amount"]
+            return pd.DataFrame(columns=columns)
+        df = self._rename_columns(df).sort_values(["symbol", "date"])
+        return df

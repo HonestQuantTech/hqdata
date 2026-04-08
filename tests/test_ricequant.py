@@ -31,4 +31,4 @@ class TestRicequantIntegration:
     def test_get_stock_bar_not_implemented(self):
         """get_stock_bar raises NotImplementedError until Ricequant adapter is implemented."""
         with pytest.raises(NotImplementedError):
-            self.source.get_stock_bar("600000.SH", "1day", "20260101", "20260101")
+            self.source.get_stock_bar("600000.SH", "day", "20260101", "20260101")
