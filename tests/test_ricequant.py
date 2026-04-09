@@ -44,7 +44,7 @@ class TestRicequantIntegration:
         assert df["symbol"].is_unique
         assert df["symbol"].str.match(r"^\d{6}\.(SH|SZ)$").all(), "symbol format should be xxxxxx.SH/SZ"
         assert df["date"].str.match(r"^\d{8}$").all(), "date should be in YYYYMMDD format"
-        # Note: is_hs is not available from rqdatac and is always empty string
+        assert df["is_hs"].isin(["Y", "N"]).all(), "is_hs should only contain Y or N"
 
     def test_get_stock_list_by_single_symbol(self):
         """Test get_stock_list with single symbol filter."""
@@ -89,23 +89,12 @@ class TestRicequantIntegration:
         assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
         # Note: BJ (Beijing Stock Exchange) is not supported by rqdatac
 
-    def test_get_stock_list_by_is_hs(self):
-        """Test get_stock_list with is_hs filter.
-
-        Note: rqdatac does not support is_hs filtering; raises NotImplementedError.
-        The is_hs field in results is always empty string — unlike tushare which populates it.
-        """
-        with pytest.raises(NotImplementedError):
-            self.source.get_stock_list(is_hs="H")
-
     def test_get_stock_list_combined_filters(self):
         """Test get_stock_list with multiple filters combined."""
         df = self.source.get_stock_list(market="MB", exchange="SSE")
         assert not df.empty, "get_stock_list returned empty DataFrame for combined filters"
         assert df["market"].str.contains("MB").all()
         assert df["exchange"].str.contains("SSE").all()
-        # Note: combined filter with list_status='D' is not tested because
-        # all_instruments(date=today) never returns delisted stocks
 
     def test_get_stock_bar_single_symbol(self):
         """Test get_stock_bar returns well-formed data for both markets."""

@@ -93,18 +93,16 @@ class TushareSource(BaseSource):
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         market: Optional[str] = None,
-        is_hs: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
         Note:
             - Only today's tradable (listed) stocks are returned.
-        
+
         Args:
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             market: Market category，supports comma-separated multiple codes
-            is_hs: see README
 
         Optional Description:
             market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
@@ -115,7 +113,6 @@ class TushareSource(BaseSource):
         """
         # Map English market abbreviations to Chinese names for tushare API
         if market:
-            # Check if market is an abbreviation that needs mapping
             market_names = []
             for m in market.split(","):
                 m = m.strip()
@@ -127,8 +124,7 @@ class TushareSource(BaseSource):
             ts_code=symbol,
             exchange=exchange,
             market=market,
-            list_status="L",  # always return listed stocks only
-            is_hs=is_hs,
+            list_status="L",
             fields=self._STOCK_LIST_FIELDS,
         )
 
@@ -138,6 +134,8 @@ class TushareSource(BaseSource):
         df["date"] = date.today().strftime("%Y%m%d")
         # Convert market values from Chinese to English abbreviations
         df["market"] = df["market"].map(lambda x: self._REVERSE_MARKET_MAP.get(x, x))
+        # Normalize is_hs: H (沪股通) and S (深股通) → Y; N → N
+        df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         return df
 
     def get_stock_bar(

@@ -74,7 +74,6 @@ get_stock_list(exchange="SSE")
 get_stock_list(exchange="SSE,SZSE")
 get_stock_list(market="MB")
 get_stock_list(market="MB,GEM,STAR")
-get_stock_list(is_hs="N")
 get_stock_list(market="MB", exchange="SSE")
 
 # 查询股票日线数据
@@ -103,7 +102,7 @@ init_source("ricequant", license_key="your_license_key")
 # 或用户名密码方式
 init_source("ricequant", username="your_email", password="your_password")
 
-# 查询股票列表（不支持 is_hs 参数，只返回当天上市状态的股票）
+# 查询股票列表（只返回当天上市状态的股票，不支持 BJ 板块）
 get_stock_list()
 get_stock_list(symbol="000001.SZ,600000.SH")
 get_stock_list(exchange="SSE")
@@ -168,14 +167,6 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀：
 | 上交所 | SSE  | 上海证券交易所 |
 | 深交所 | SZSE | 深圳证券交易所 |
 | 北交所 | BSE  | 北京证券交易所 |
-
-### is_hs（是否沪深港通标的）
-
-| 值  | 说明   |
-| --- | ------ |
-| `H` | 沪股通 |
-| `S` | 深股通 |
-| `N` | 否     |
 
 ### market（市场板块）
 

@@ -51,6 +51,7 @@ class TestTushareIntegration:
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
         assert df["symbol"].is_unique
         assert df["date"].str.match(r"^\d{8}$").all(), "date should be in YYYYMMDD format"
+        assert df["is_hs"].isin(["Y", "N"]).all(), "is_hs should only contain Y or N"
 
     def test_get_stock_list_by_single_symbol(self):
         """Test get_stock_list with single symbol filter."""
@@ -94,12 +95,6 @@ class TestTushareIntegration:
         has_gem = df["market"].str.contains("GEM").any()
         has_star = df["market"].str.contains("STAR").any()
         assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
-
-    def test_get_stock_list_by_is_hs(self):
-        """Test get_stock_list with is_hs filter (H)."""
-        df = self.source.get_stock_list(is_hs="H")
-        assert not df.empty, "get_stock_list returned empty DataFrame for is_hs=H"
-        assert (df["is_hs"] == "H").all(), "Expected all stocks to be H"
 
     def test_get_stock_list_combined_filters(self):
         """Test get_stock_list with multiple filters combined."""

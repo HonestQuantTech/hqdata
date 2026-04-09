@@ -32,7 +32,6 @@ def get_stock_list(
     symbol: Optional[str] = None,
     exchange: Optional[str] = None,
     market: Optional[str] = None,
-    is_hs: Optional[str] = None,
 ) -> pd.DataFrame:
     """Get basic info for stocks.
 
@@ -40,7 +39,6 @@ def get_stock_list(
         symbol: see README, supports comma-separated multiple codes
         exchange: see README, supports comma-separated multiple exchanges
         market: Market category，supports comma-separated multiple codes
-        is_hs: see README
 
     Optional Description:
         market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
@@ -52,7 +50,7 @@ def get_stock_list(
 
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    return _source.get_stock_list(symbol=symbol, exchange=exchange, market=market, is_hs=is_hs)
+    return _source.get_stock_list(symbol=symbol, exchange=exchange, market=market)
 
 
 def get_stock_bar(

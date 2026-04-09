@@ -49,7 +49,6 @@ class BaseSource(ABC):
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         market: Optional[str] = None,
-        is_hs: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
@@ -57,7 +56,6 @@ class BaseSource(ABC):
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             market: Market category，supports comma-separated multiple codes
-            is_hs: see README
 
         Optional Description:
             market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)

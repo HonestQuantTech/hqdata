@@ -105,18 +105,35 @@ class RicequantSource(BaseSource):
                 'pre_close', 'change', 'pct_change', 'volume', 'turnover']
         return df[cols].sort_values(['symbol', 'date']).reset_index(drop=True)
 
+    @staticmethod
+    def _get_hs_connect_stocks(rq) -> set:
+        """Return set of order_book_ids that are HS Connect eligible stocks.
+
+        Fetches data via get_stock_connect('all_connect') for the most recent
+        trading date that has available data (walks back up to 60 trading days).
+        Returns an empty set if no data is available.
+        """
+        today = date.today()
+        trading_dates = rq.get_trading_dates(
+            start_date=today.replace(year=today.year - 1),
+            end_date=today,
+            market='cn',
+        )
+        for d in reversed(trading_dates):
+            df = rq.get_stock_connect('all_connect', start_date=d, end_date=d)
+            if df is not None:
+                return set(df.index.get_level_values('order_book_id').unique())
+        return set()
+
     def get_stock_list(
         self,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         market: Optional[str] = None,
-        is_hs: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
         Note:
-            - is_hs field is not available from rqdatac and will always be empty.
-            - Passing is_hs parameter raises NotImplementedError.
             - BJ (Beijing Stock Exchange) stocks are not supported.
             - Only today's tradable (listed) stocks are returned.
 
@@ -124,7 +141,6 @@ class RicequantSource(BaseSource):
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             market: Market category, supports comma-separated multiple codes
-            is_hs: Not supported by rqdatac, raises NotImplementedError if provided
 
         Optional Description:
             market: MB(主板), GEM(创业板), STAR(科创板), BJ(北交所, unsupported)
@@ -133,12 +149,6 @@ class RicequantSource(BaseSource):
             DataFrame with columns: symbol, name, industry, market, exchange,
             curr_type, list_date, delist_date, is_hs, date
         """
-        if is_hs is not None:
-            raise NotImplementedError(
-                "is_hs filter is not supported by rqdatac. "
-                "The is_hs field in results is always empty."
-            )
-
         rq = _get_rqdatac()
         df = rq.all_instruments(type='CS', date=date.today())
 
@@ -171,6 +181,7 @@ class RicequantSource(BaseSource):
         if df.empty:
             return self._empty_stock_list()
 
+        hs_stocks = self._get_hs_connect_stocks(rq)
         result = pd.DataFrame({
             'symbol': rq.id_convert(df['order_book_id'].tolist(), to='normal'),
             'name': df['symbol'].tolist(),
@@ -180,7 +191,7 @@ class RicequantSource(BaseSource):
             'curr_type': 'CNY',
             'list_date': df['listed_date'].tolist(),
             'delist_date': df['de_listed_date'].tolist(),
-            'is_hs': '',
+            'is_hs': df['order_book_id'].isin(hs_stocks).map({True: 'Y', False: 'N'}).tolist(),
             'date': date.today().strftime('%Y%m%d'),
         })
         return result.sort_values('symbol').reset_index(drop=True)
