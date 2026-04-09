@@ -37,11 +37,10 @@ class TestRicequantIntegration:
         """Test get_stock_list returns well-formed data for listed stocks."""
         df = self.source.get_stock_list()
         expected_columns = {"symbol", "name", "industry", "market", "exchange",
-                            "curr_type", "list_status", "list_date", "delist_date", "is_hs", "date"}
+                            "curr_type", "list_date", "delist_date", "is_hs", "date"}
 
         assert not df.empty
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert (df["list_status"] == "L").all()  # all_instruments(date=today) only returns tradable stocks
         assert df["symbol"].is_unique
         assert df["symbol"].str.match(r"^\d{6}\.(SH|SZ)$").all(), "symbol format should be xxxxxx.SH/SZ"
         assert df["date"].str.match(r"^\d{8}$").all(), "date should be in YYYYMMDD format"
@@ -89,21 +88,6 @@ class TestRicequantIntegration:
         has_star = df["market"].str.contains("STAR").any()
         assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
         # Note: BJ (Beijing Stock Exchange) is not supported by rqdatac
-
-    def test_get_stock_list_by_list_status(self):
-        """Test get_stock_list with list_status filter.
-
-        Note: rqdatac all_instruments(date=today) only returns today's tradable stocks,
-        so list_status='D' (delisted) always returns empty — unlike tushare which supports it.
-        """
-        df = self.source.get_stock_list(list_status="L")
-        assert not df.empty
-        assert (df["list_status"] == "L").all()
-
-        # list_status='D' returns empty because all_instruments(date=today)
-        # only returns tradable (non-delisted) stocks
-        df = self.source.get_stock_list(list_status="D")
-        assert df.empty
 
     def test_get_stock_list_by_is_hs(self):
         """Test get_stock_list with is_hs filter.

@@ -45,11 +45,10 @@ class TestTushareIntegration:
         """Test get_stock_list returns well-formed data for listed stocks."""
         df = self.source.get_stock_list()
         expected_columns = {"symbol", "name", "industry", "market", "exchange",
-                            "curr_type", "list_status", "list_date", "delist_date", "is_hs", "date"}
+                            "curr_type", "list_date", "delist_date", "is_hs", "date"}
 
         assert not df.empty
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert (df["list_status"] == "L").all()
         assert df["symbol"].is_unique
         assert df["date"].str.match(r"^\d{8}$").all(), "date should be in YYYYMMDD format"
 
@@ -96,12 +95,6 @@ class TestTushareIntegration:
         has_star = df["market"].str.contains("STAR").any()
         assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
 
-    def test_get_stock_list_by_list_status(self):
-        """Test get_stock_list with list_status filter (D)."""
-        df = self.source.get_stock_list(list_status="D")
-        assert not df.empty, "get_stock_list(list_status='D') returned empty DataFrame"
-        assert (df["list_status"] == "D").all(), "Expected all stocks to have list_status='D'"
-
     def test_get_stock_list_by_is_hs(self):
         """Test get_stock_list with is_hs filter (H)."""
         df = self.source.get_stock_list(is_hs="H")
@@ -110,10 +103,10 @@ class TestTushareIntegration:
 
     def test_get_stock_list_combined_filters(self):
         """Test get_stock_list with multiple filters combined."""
-        df = self.source.get_stock_list(list_status="D", market="MB")
+        df = self.source.get_stock_list(market="MB", exchange="SSE")
         assert not df.empty, "get_stock_list returned empty DataFrame for combined filters"
-        assert (df["list_status"] == "D").all()
         assert df["market"].str.contains("MB").all()
+        assert df["exchange"].str.contains("SSE").all()
 
     def test_get_stock_bar_single_symbol(self):
         """Test get_stock_bar returns well-formed data for both markets."""

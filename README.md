@@ -66,17 +66,16 @@ from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, g
 # 初始化 Tushare
 init_source("tushare")
 
-# 查询股票列表 (支持5种过滤参数)
-get_stock_list() # 等同于get_stock_list(list_status="L")
+# 查询股票列表 (支持4种过滤参数，只返回当天上市状态的股票)
+get_stock_list()
 get_stock_list(symbol="000001.SZ")
 get_stock_list(symbol="000001.SZ,600000.SH")
 get_stock_list(exchange="SSE")
 get_stock_list(exchange="SSE,SZSE")
 get_stock_list(market="MB")
 get_stock_list(market="MB,GEM,STAR")
-get_stock_list(list_status="D")
 get_stock_list(is_hs="N")
-get_stock_list(market="MB", list_status="D")
+get_stock_list(market="MB", exchange="SSE")
 
 # 查询股票日线数据
 get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
@@ -104,12 +103,11 @@ init_source("ricequant", license_key="your_license_key")
 # 或用户名密码方式
 init_source("ricequant", username="your_email", password="your_password")
 
-# 查询股票列表（不支持 is_hs 参数）
+# 查询股票列表（不支持 is_hs 参数，只返回当天上市状态的股票）
 get_stock_list()
 get_stock_list(symbol="000001.SZ,600000.SH")
 get_stock_list(exchange="SSE")
 get_stock_list(market="MB,GEM,STAR")
-get_stock_list(list_status="D")
 
 # 查询股票行情（支持日线/分钟线/周线，不支持月线和tick）
 get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
@@ -170,15 +168,6 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀：
 | 上交所 | SSE  | 上海证券交易所 |
 | 深交所 | SZSE | 深圳证券交易所 |
 | 北交所 | BSE  | 北京证券交易所 |
-
-### list_status（上市状态）
-
-| 值  | 说明         |
-| --- | ------------ |
-| `L` | 上市（默认） |
-| `D` | 退市         |
-| `P` | 暂停上市     |
-| `G` | 过会未交易   |
 
 ### is_hs（是否沪深港通标的）
 

@@ -32,7 +32,6 @@ def get_stock_list(
     symbol: Optional[str] = None,
     exchange: Optional[str] = None,
     market: Optional[str] = None,
-    list_status: str = "L",
     is_hs: Optional[str] = None,
 ) -> pd.DataFrame:
     """Get basic info for stocks.
@@ -41,20 +40,19 @@ def get_stock_list(
         symbol: see README, supports comma-separated multiple codes
         exchange: see README, supports comma-separated multiple exchanges
         market: Market category，supports comma-separated multiple codes
-        list_status: see README
         is_hs: see README
 
-    Special:
+    Optional Description:
         market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
-        
+
     Returns:
         DataFrame with columns: symbol, name, industry, market, exchange,
-        curr_type, list_status, list_date, delist_date, is_hs, date
+        curr_type, list_date, delist_date, is_hs, date
     """
 
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    return _source.get_stock_list(symbol=symbol, exchange=exchange, market=market, list_status=list_status, is_hs=is_hs)
+    return _source.get_stock_list(symbol=symbol, exchange=exchange, market=market, is_hs=is_hs)
 
 
 def get_stock_bar(
@@ -91,7 +89,7 @@ def get_index_list(
         symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
         market: see README, supports comma-separated multiple markets. Required if symbol is not provided.
 
-    Special:
+    Optional Description:
         market: CSI(中证指数),CICC(中金指数),SSE(上交所指数),SZSE(深交所指数),SW(申万指数),MSCI(MSCI指数),OTH(其他指数)
         
     Returns:

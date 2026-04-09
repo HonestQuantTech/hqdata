@@ -16,13 +16,39 @@ class BaseSource(ABC):
             raise ValueError(error_msg)
         return value
 
+    @staticmethod
+    def _empty_stock_list() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'name', 'industry', 'market', 'exchange',
+            'curr_type', 'list_date', 'delist_date', 'is_hs', 'date',
+        ])
+
+    @staticmethod
+    def _empty_stock_bar() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'date', 'open', 'high', 'low', 'close',
+            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
+        ])
+
+    @staticmethod
+    def _empty_index_list() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date',
+        ])
+
+    @staticmethod
+    def _empty_index_bar() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'date', 'open', 'high', 'low', 'close',
+            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
+        ])
+
     @abstractmethod
     def get_stock_list(
         self,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         market: Optional[str] = None,
-        list_status: str = "L",
         is_hs: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
@@ -31,15 +57,14 @@ class BaseSource(ABC):
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             market: Market category，supports comma-separated multiple codes
-            list_status: see README
             is_hs: see README
 
-        Special:
+        Optional Description:
             market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
 
         Returns:
             DataFrame with columns: symbol, name, industry, market, exchange,
-            curr_type, list_status, list_date, delist_date, is_hs, date
+            curr_type, list_date, delist_date, is_hs, date
         """
         pass
 
@@ -76,7 +101,7 @@ class BaseSource(ABC):
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
             market: see README, supports comma-separated multiple markets. Required if symbol is not provided.
 
-        Special:
+        Optional Description:
             market: CSI(中证指数),CICC(中金指数),SSE(上交所指数),SZSE(深交所指数),SW(申万指数),MSCI(MSCI指数),OTH(其他指数)
             
         Returns:

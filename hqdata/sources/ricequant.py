@@ -29,9 +29,6 @@ class RicequantSource(BaseSource):
     }
 
     _BOARD_TYPE_MAP = {'MainBoard': 'MB', 'SME': 'MB', 'GEM': 'GEM', 'KSH': 'STAR'}
-    _STATUS_MAP = {
-        'Active': 'L', 'Delisted': 'D', 'TemporarySuspended': 'P', 'PreIPO': 'G',
-    }
     _EXCHANGE_MAP = {'XSHG': 'SSE', 'XSHE': 'SZSE'}
     _REVERSE_EXCHANGE_MAP = {'SSE': 'XSHG', 'SZSE': 'XSHE'}
 
@@ -42,37 +39,6 @@ class RicequantSource(BaseSource):
         'STAR': ['KSH'],
         'BJ': [],  # Not supported in rqdatac
     }
-    # hqdata list_status → rqdatac status
-    _STATUS_FILTER_MAP = {
-        'L': 'Active', 'D': 'Delisted', 'P': 'TemporarySuspended', 'G': 'PreIPO',
-    }
-
-    @staticmethod
-    def _empty_stock_list() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'name', 'industry', 'market', 'exchange',
-            'curr_type', 'list_status', 'list_date', 'delist_date', 'is_hs', 'date',
-        ])
-
-    @staticmethod
-    def _empty_stock_bar() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'high', 'low', 'close',
-            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
-        ])
-
-    @staticmethod
-    def _empty_index_list() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date',
-        ])
-
-    @staticmethod
-    def _empty_index_bar() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'high', 'low', 'close',
-            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
-        ])
 
     def __init__(
         self,
@@ -144,7 +110,6 @@ class RicequantSource(BaseSource):
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         market: Optional[str] = None,
-        list_status: str = "L",
         is_hs: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
@@ -153,21 +118,20 @@ class RicequantSource(BaseSource):
             - is_hs field is not available from rqdatac and will always be empty.
             - Passing is_hs parameter raises NotImplementedError.
             - BJ (Beijing Stock Exchange) stocks are not supported.
-            - Only today's tradable stocks are returned; list_status='D' always yields empty results.
+            - Only today's tradable (listed) stocks are returned.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             market: Market category, supports comma-separated multiple codes
-            list_status: see README
             is_hs: Not supported by rqdatac, raises NotImplementedError if provided
 
-        Special:
+        Optional Description:
             market: MB(主板), GEM(创业板), STAR(科创板), BJ(北交所, unsupported)
 
         Returns:
             DataFrame with columns: symbol, name, industry, market, exchange,
-            curr_type, list_status, list_date, delist_date, is_hs, date
+            curr_type, list_date, delist_date, is_hs, date
         """
         if is_hs is not None:
             raise NotImplementedError(
@@ -181,7 +145,7 @@ class RicequantSource(BaseSource):
         if df is None or df.empty:
             return self._empty_stock_list()
 
-        df = df.reset_index(drop=True)
+        df = df[df['status'] == 'Active'].reset_index(drop=True)
 
         # Apply filters on raw rqdatac values (before mapping to hqdata conventions)
         if symbol:
@@ -204,11 +168,6 @@ class RicequantSource(BaseSource):
                 rq_board_types.extend(self._MARKET_FILTER_MAP.get(m.strip(), []))
             df = df[df['board_type'].isin(rq_board_types)].reset_index(drop=True)
 
-        if list_status:
-            rq_status = self._STATUS_FILTER_MAP.get(list_status)
-            if rq_status:
-                df = df[df['status'] == rq_status].reset_index(drop=True)
-
         if df.empty:
             return self._empty_stock_list()
 
@@ -219,7 +178,6 @@ class RicequantSource(BaseSource):
             'market': df['board_type'].map(self._BOARD_TYPE_MAP).tolist(),
             'exchange': df['exchange'].map(self._EXCHANGE_MAP).tolist(),
             'curr_type': 'CNY',
-            'list_status': df['status'].map(self._STATUS_MAP).tolist(),
             'list_date': df['listed_date'].tolist(),
             'delist_date': df['de_listed_date'].tolist(),
             'is_hs': '',
@@ -284,7 +242,7 @@ class RicequantSource(BaseSource):
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
             market: SSE(上交所) or SZSE(深交所) only. Required if symbol is not provided.
 
-        Special:
+        Optional Description:
             market: SSE(上交所指数) and SZSE(深交所指数) are supported.
                     CSI, CICC, SW, MSCI, OTH are not supported.
 
