@@ -52,6 +52,33 @@ class TushareSource(BaseSource):
     # respect the same global rate limit — intentional singleton-style design.
     _rate_limiter = _RateLimiter(max_calls=200, window_seconds=60.0)
 
+    @staticmethod
+    def _empty_stock_list() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'name', 'industry', 'market', 'exchange',
+            'curr_type', 'list_status', 'list_date', 'delist_date', 'is_hs', 'date',
+        ])
+
+    @staticmethod
+    def _empty_stock_bar() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'date', 'open', 'high', 'low', 'close',
+            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
+        ])
+
+    @staticmethod
+    def _empty_index_list() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date',
+        ])
+
+    @staticmethod
+    def _empty_index_bar() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'date', 'open', 'high', 'low', 'close',
+            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
+        ])
+
     def __init__(self, token: Optional[str] = None):
         """Initialize tushare connection.
 
@@ -74,6 +101,7 @@ class TushareSource(BaseSource):
             "trade_date": "date",
             "pct_chg": "pct_change",
             "vol": "volume",
+            "amount": "turnover",
         })
 
     _MARKET_MAP = {
@@ -131,9 +159,7 @@ class TushareSource(BaseSource):
         )
 
         if df is None or df.empty:
-            columns = ["symbol", "name", "industry", "market", "exchange",
-                      "curr_type", "list_status", "list_date", "delist_date", "is_hs", "date"]
-            return pd.DataFrame(columns=columns)
+            return self._empty_stock_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = date.today().strftime("%Y%m%d")
         # Convert market values from Chinese to English abbreviations
@@ -156,7 +182,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
+            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
         """
         if frequency != "day":
             raise NotImplementedError(
@@ -167,8 +193,7 @@ class TushareSource(BaseSource):
         df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
 
         if df is None or df.empty:
-            columns = ["symbol", "date", "open", "high", "low", "close", "pre_close", "change", "pct_change", "volume", "amount"]
-            return pd.DataFrame(columns=columns)
+            return self._empty_stock_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
         return df
 
@@ -222,8 +247,7 @@ class TushareSource(BaseSource):
             df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:
-            columns = ["symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"]
-            return pd.DataFrame(columns=columns)
+            return self._empty_index_list()
         df = self._rename_columns(df).sort_values("symbol")
         return df
 
@@ -241,7 +265,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
+            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
         """
         symbols = [s.strip() for s in symbol.split(",")]
         dfs = []
@@ -253,7 +277,6 @@ class TushareSource(BaseSource):
         df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:
-            columns = ["symbol", "date", "open", "high", "low", "close", "pre_close", "change", "pct_change", "volume", "amount"]
-            return pd.DataFrame(columns=columns)
+            return self._empty_index_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
         return df

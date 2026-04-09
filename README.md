@@ -17,13 +17,13 @@
 
 ## 支持的数据源
 
-| 数据源      | 状态   | 说明                                        |
-| ----------- | ------ | ------------------------------------------- |
-| **AKShare** | 计划中 | 免费，实时数据                              |
-| **Tushare** | 已接入 | 需满足账户积分要求，支持股票&指数的历史日线 |
-| **米筐**    | 接入中 | 需license，支持Tick                         |
-| **迅投**    | 计划中 | 需迅投终端                                  |
-| **iTick**   | 计划中 | 需注册                                      |
+| 数据源      | 状态   | 说明                                                    |
+| ----------- | ------ | ------------------------------------------------------- |
+| **AKShare** | 计划中 | 免费，实时数据                                          |
+| **Tushare** | 已接入 | 需满足账户积分要求，支持股票&指数的历史日线             |
+| **米筐**    | 已接入 | 需license，支持日线/分钟线（不支持月线/暂时不支持tick） |
+| **迅投**    | 计划中 | 需迅投终端                                              |
+| **iTick**   | 计划中 | 需注册                                                  |
 
 ## 安装
 
@@ -63,7 +63,7 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 ```python
 from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
 
-# 初始化
+# 初始化 Tushare
 init_source("tushare")
 
 # 查询股票列表 (支持5种过滤参数)
@@ -88,6 +88,36 @@ get_index_list(symbol="000300.SH,000905.SH")
 get_index_list(market="SSE")
 get_index_list(market="SSE,SZSE")
 get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market, 只有symbol字段会生效
+
+# 查询指数日线数据
+get_index_bar("000300.SH", start_date="20260101", end_date="20260401")
+get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
+```
+
+以 米筐 为例：
+
+```python
+from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
+
+# 初始化米筐（推荐 license key 方式）
+init_source("ricequant", license_key="your_license_key")
+# 或用户名密码方式
+init_source("ricequant", username="your_email", password="your_password")
+
+# 查询股票列表（不支持 is_hs 参数）
+get_stock_list()
+get_stock_list(symbol="000001.SZ,600000.SH")
+get_stock_list(exchange="SSE")
+get_stock_list(market="MB,GEM,STAR")
+get_stock_list(list_status="D")
+
+# 查询股票行情（支持日线/分钟线/周线，不支持月线和tick）
+get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
+get_stock_bar("000001.SZ,600000.SH", frequency="5m", start_date="20260101", end_date="20260401")
+
+# 查询指数列表（market 仅支持 SSE/SZSE）
+get_index_list(symbol="000300.SH")
+get_index_list(market="SSE")
 
 # 查询指数日线数据
 get_index_bar("000300.SH", start_date="20260101", end_date="20260401")

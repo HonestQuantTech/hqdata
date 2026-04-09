@@ -60,7 +60,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
+            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
         """
         pass
 
@@ -99,6 +99,6 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, amount
+            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
         """
         pass

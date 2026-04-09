@@ -118,7 +118,7 @@ class TestTushareIntegration:
     def test_get_stock_bar_single_symbol(self):
         """Test get_stock_bar returns well-formed data for both markets."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
-                            "pre_close", "change", "pct_change", "volume", "amount"}
+                            "pre_close", "change", "pct_change", "volume", "turnover"}
 
         for symbol in ("000001.SZ", "600000.SH"):
             df = self.source.get_stock_bar(symbol, "day", "20260101", "20260401")
@@ -128,12 +128,13 @@ class TestTushareIntegration:
             assert (df["high"] >= df["close"]).all(), "high < close found"
             assert (df["low"] <= df["close"]).all(), "low > close found"
             assert (df["volume"] > 0).all(), "non-positive volume found"
-            assert (df["amount"] > 0).all(), "non-positive amount found"
+            assert (df["turnover"] > 0).all(), "non-positive amount found"
+            assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
 
     def test_get_stock_bar_multiple_symbols(self):
         """Test get_stock_bar returns well-formed data for multiple symbols."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
-                            "pre_close", "change", "pct_change", "volume", "amount"}
+                            "pre_close", "change", "pct_change", "volume", "turnover"}
 
         symbols = "000001.SZ,600000.SH"
         df = self.source.get_stock_bar(symbols, "day", "20260101", "20260401")
@@ -210,23 +211,22 @@ class TestTushareIntegration:
     def test_get_index_bar_single_symbol(self):
         """Test get_index_bar returns well-formed data for major indexes."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
-                            "pre_close", "change", "pct_change", "volume", "amount"}
+                            "pre_close", "change", "pct_change", "volume", "turnover"}
 
         for symbol in ("000300.SH", "000905.SH", "000852.SH", "932000.CSI"):
             df = self.source.get_index_bar(symbol, "20260101", "20260401")
-            print(df)
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
             assert (df["high"] >= df["low"]).all(), "high < low found"
             assert (df["high"] >= df["close"]).all(), "high < close found"
             assert (df["low"] <= df["close"]).all(), "low > close found"
             assert (df["volume"] > 0).all(), "non-positive volume found"
-            assert (df["amount"] > 0).all(), "non-positive amount found"
+            assert (df["turnover"] > 0).all(), "non-positive amount found"
 
     def test_get_index_bar_multiple_symbols(self):
         """Test get_index_bar returns well-formed data for multiple indexes."""
         expected_columns = {"symbol", "date", "open", "high", "low", "close",
-                            "pre_close", "change", "pct_change", "volume", "amount"}
+                            "pre_close", "change", "pct_change", "volume", "turnover"}
 
         symbols = "000300.SH,000905.SH"
         df = self.source.get_index_bar(symbols, "20260101", "20260401")
