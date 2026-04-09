@@ -58,23 +58,24 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 
 ## 使用
 
-以 Tushare 为例：
+以 Tushare/米筐为例 为例：
 
 ```python
 from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
 
-# 初始化 Tushare
-init_source("tushare")
+# 初始化 Tushare 
+init_source("tushare") # 如果使用米筐数据源则将"tushare"替换为"ricequant"，其它数据源同理
 
-# 查询股票列表 (支持4种过滤参数，只返回当天上市状态的股票)
-get_stock_list()
-get_stock_list(symbol="000001.SZ")
-get_stock_list(symbol="000001.SZ,600000.SH")
-get_stock_list(exchange="SSE")
-get_stock_list(exchange="SSE,SZSE")
-get_stock_list(market="MB")
-get_stock_list(market="MB,GEM,STAR")
-get_stock_list(market="MB", exchange="SSE")
+# 查询股票列表（只返回当天上市状态的股票；多参数同时传入时取交集）
+get_stock_list()                                                    # 返回所有股票
+get_stock_list(symbol="000001.SZ")                                  # 单只股票
+get_stock_list(symbol="000001.SZ,600000.SH")                       # 多只股票
+get_stock_list(exchange="SSE")                                      # 单个交易所
+get_stock_list(exchange="SSE,SZSE")                                 # 多个交易所
+get_stock_list(market="MB")                                         # 单个板块
+get_stock_list(market="MB,GEM,STAR")                               # 多个板块
+get_stock_list(market="MB", exchange="SSE")                        # 主板 + 上交所
+get_stock_list(symbol="000001.SZ", market="MB", exchange="SZSE")   # 三参数取交集
 
 # 查询股票日线数据
 get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
@@ -86,35 +87,6 @@ get_index_list(symbol="000300.SH,000905.SH")
 get_index_list(market="SSE")
 get_index_list(market="SSE,SZSE")
 get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market, 只有symbol字段会生效
-
-# 查询指数日线数据
-get_index_bar("000300.SH", start_date="20260101", end_date="20260401")
-get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
-```
-
-以 米筐 为例：
-
-```python
-from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
-
-# 初始化米筐（推荐 license key 方式）
-init_source("ricequant", license_key="your_license_key")
-# 或用户名密码方式
-init_source("ricequant", username="your_email", password="your_password")
-
-# 查询股票列表（只返回当天上市状态的股票，不支持 BJ 板块）
-get_stock_list()
-get_stock_list(symbol="000001.SZ,600000.SH")
-get_stock_list(exchange="SSE")
-get_stock_list(market="MB,GEM,STAR")
-
-# 查询股票行情（支持日线/分钟线/周线，不支持月线和tick）
-get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
-get_stock_bar("000001.SZ,600000.SH", frequency="5m", start_date="20260101", end_date="20260401")
-
-# 查询指数列表（market 仅支持 SSE/SZSE）
-get_index_list(symbol="000300.SH")
-get_index_list(market="SSE")
 
 # 查询指数日线数据
 get_index_bar("000300.SH", start_date="20260101", end_date="20260401")

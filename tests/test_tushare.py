@@ -97,11 +97,19 @@ class TestTushareIntegration:
         assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
 
     def test_get_stock_list_combined_filters(self):
-        """Test get_stock_list with multiple filters combined."""
-        df = self.source.get_stock_list(market="MB", exchange="SSE")
-        assert not df.empty, "get_stock_list returned empty DataFrame for combined filters"
-        assert df["market"].str.contains("MB").all()
-        assert df["exchange"].str.contains("SSE").all()
+        """Test get_stock_list with multiple filters combined (AND semantics)."""
+        # Two params: market + exchange
+        df2 = self.source.get_stock_list(market="MB", exchange="SSE")
+        assert not df2.empty, "get_stock_list returned empty DataFrame for market=MB,exchange=SSE"
+        assert df2["market"].str.contains("MB").all()
+        assert df2["exchange"].str.contains("SSE").all()
+
+        # Three params: symbol + market + exchange (all compatible: 000001.SZ is MB on SZSE)
+        df3 = self.source.get_stock_list(symbol="000001.SZ", market="MB", exchange="SZSE")
+        assert not df3.empty, "get_stock_list returned empty DataFrame for symbol+market+exchange"
+        assert "000001.SZ" in df3["symbol"].values
+        assert df3["market"].str.contains("MB").all()
+        assert df3["exchange"].str.contains("SZSE").all()
 
     def test_get_stock_bar_single_symbol(self):
         """Test get_stock_bar returns well-formed data for both markets."""
