@@ -179,22 +179,16 @@ class TushareSource(BaseSource):
 
         Args:
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets. Required if symbol is not provided.
+            market: see README, supports comma-separated multiple markets.
 
         Optional Description:
             market: CSI(中证指数),CICC(中金指数),SSE(上交所指数),SZSE(深交所指数),SW(申万指数),MSCI(MSCI指数),OTH(其他指数)
-            
+
         Returns:
             DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
         """
-        # Determine whether to query by symbol or by market
-        # If symbol is provided (even as comma-separated list), ignore market
-        # If symbol is not provided, market must be provided
         use_symbol = symbol and symbol.strip()
         use_market = market and market.strip() if not use_symbol else None
-
-        if not use_symbol and not use_market:
-            raise ValueError("At least one of symbol or market must be provided")
 
         if use_symbol:
             symbols = [s.strip() for s in symbol.split(",")]
@@ -205,7 +199,7 @@ class TushareSource(BaseSource):
                 if df is not None and not df.empty:
                     dfs.append(df)
             df = pd.concat(dfs, ignore_index=True) if dfs else None
-        else:
+        elif use_market:
             markets = [m.strip() for m in market.split(",")]
             dfs = []
             for m in markets:
@@ -214,6 +208,9 @@ class TushareSource(BaseSource):
                 if df is not None and not df.empty:
                     dfs.append(df)
             df = pd.concat(dfs, ignore_index=True) if dfs else None
+        else:
+            self._rate_limiter.acquire()
+            df = self.pro.index_basic(fields=self._INDEX_LIST_FIELDS)
 
         if df is None or df.empty:
             return self._empty_index_list()

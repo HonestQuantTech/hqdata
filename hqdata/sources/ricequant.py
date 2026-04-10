@@ -253,7 +253,7 @@ class RicequantSource(BaseSource):
             market: SSE(上交所) or SZSE(深交所) only. Required if symbol is not provided.
 
         Optional Description:
-            market: SSE(上交所指数) and SZSE(深交所指数) are supported.
+            market: SSE(上交所指数), SZSE(深交所指数) and BJSE(北交所指数) are supported.
                     CSI, CICC, SW, MSCI, OTH are not supported.
 
         Returns:
@@ -261,9 +261,6 @@ class RicequantSource(BaseSource):
         """
         use_symbol = symbol and symbol.strip()
         use_market = market and market.strip() if not use_symbol else None
-
-        if not use_symbol and not use_market:
-            raise ValueError("At least one of symbol or market must be provided")
 
         rq = _get_rqdatac()
         df = rq.all_instruments(type='INDX', date=date.today())
@@ -278,7 +275,7 @@ class RicequantSource(BaseSource):
             if isinstance(rq_symbols, str):
                 rq_symbols = [rq_symbols]
             df = df[df['order_book_id'].isin(rq_symbols)].reset_index(drop=True)
-        else:
+        elif use_market:
             rq_exchanges = [
                 self._EXCHANGE_MAP[m.strip()]
                 for m in market.split(",")

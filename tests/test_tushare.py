@@ -200,10 +200,12 @@ class TestTushareIntegration:
         assert len(df) == 1, f"Expected single index when symbol provided, got {len(df)} rows"
         assert df.iloc[0]["symbol"] == "000300.SH", "Expected 000300.SH result when symbol is provided"
 
-    def test_get_index_list_error_without_params(self):
-        """Test that ValueError is raised when neither symbol nor market is provided."""
-        with pytest.raises(ValueError, match="At least one of symbol or market must be provided"):
-            self.source.get_index_list()
+    def test_get_index_list_without_params(self):
+        """Test get_index_list returns all indexes when no params provided."""
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+        df = self.source.get_index_list()
+        assert not df.empty, "get_index_list returned empty DataFrame with no params"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
 
     def test_get_index_bar_single_symbol(self):
         """Test get_index_bar returns well-formed data for major indexes."""

@@ -67,21 +67,22 @@ from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, g
 init_source("tushare") # 如果使用米筐数据源则将"tushare"替换为"ricequant"，其它数据源同理
 
 # 查询股票列表（只返回当天上市状态的股票；多参数同时传入时取交集）
-get_stock_list()                                                    # 返回所有股票
-get_stock_list(symbol="000001.SZ")                                  # 单只股票
-get_stock_list(symbol="000001.SZ,600000.SH")                       # 多只股票
-get_stock_list(exchange="SSE")                                      # 单个交易所
-get_stock_list(exchange="SSE,SZSE")                                 # 多个交易所
-get_stock_list(board="MB")                                          # 单个板块
-get_stock_list(board="MB,GEM,STAR")                                # 多个板块
-get_stock_list(board="MB", exchange="SSE")                         # 主板 + 上交所
-get_stock_list(symbol="000001.SZ", exchange="SZSE", board="MB")   # 三参数取交集
+get_stock_list() # 返回所有股票
+get_stock_list(symbol="000001.SZ") # 单只股票
+get_stock_list(symbol="000001.SZ,600000.SH") # 多只股票
+get_stock_list(exchange="SSE") # 单个交易所
+get_stock_list(exchange="SSE,SZSE") # 多个交易所
+get_stock_list(board="MB") # 单个板块
+get_stock_list(board="MB,GEM,STAR") # 多个板块
+get_stock_list(board="MB", exchange="SSE") # 主板 + 上交所
+get_stock_list(symbol="000001.SZ", exchange="SZSE", board="MB") # 三参数取交集
 
 # 查询股票日线数据
 get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
 get_stock_bar("000001.SZ,600000.SH", frequency="day", start_date="20260101", end_date="20260401")
 
 # 查询指数列表
+get_index_list() # 返回所有指数
 get_index_list(symbol="000300.SH")
 get_index_list(symbol="000300.SH,000905.SH")
 get_index_list(market="SSE")
