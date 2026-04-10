@@ -96,9 +96,6 @@ class BaseSource(ABC):
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
             market: see README, supports comma-separated multiple markets.
 
-        Optional Description:
-            market: CSI(中证指数),CICC(中金指数),SSE(上交所指数),SZSE(深交所指数),SW(申万指数),MSCI(MSCI指数),OTH(其他指数)
-
         Returns:
             DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
         """

@@ -35,7 +35,7 @@ class RicequantSource(BaseSource):
         'MB': 'MainBoard',
         'GEM': 'GEM',
         'STAR': 'KSH',
-        'BJSE': 'BJSE',
+        'BJSE': 'BJS',
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
@@ -250,11 +250,7 @@ class RicequantSource(BaseSource):
 
         Args:
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: SSE(上交所) or SZSE(深交所) only. Required if symbol is not provided.
-
-        Optional Description:
-            market: SSE(上交所指数), SZSE(深交所指数) and BJSE(北交所指数) are supported.
-                    CSI, CICC, SW, MSCI, OTH are not supported.
+            market: see README, supports comma-separated multiple markets.
 
         Returns:
             DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
