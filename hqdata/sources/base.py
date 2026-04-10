@@ -19,7 +19,7 @@ class BaseSource(ABC):
     @staticmethod
     def _empty_stock_list() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'name', 'industry', 'market', 'exchange',
+            'symbol', 'name', 'industry', 'board', 'exchange',
             'curr_type', 'list_date', 'delist_date', 'is_hs', 'date',
         ])
 
@@ -48,20 +48,17 @@ class BaseSource(ABC):
         self,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
-        market: Optional[str] = None,
+        board: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
-            market: Market category，supports comma-separated multiple codes
-
-        Optional Description:
-            market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
+            board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, industry, market, exchange,
+            DataFrame with columns: symbol, name, industry, board, exchange,
             curr_type, list_date, delist_date, is_hs, date
         """
         pass

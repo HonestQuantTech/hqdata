@@ -52,13 +52,14 @@ class TushareSource(BaseSource):
     # respect the same global rate limit — intentional singleton-style design.
     _rate_limiter = _RateLimiter(max_calls=200, window_seconds=60.0)
 
-    _MARKET_MAP = {
+    _BOARD_MAP = {
         "MB": "主板",
         "GEM": "创业板",
         "STAR": "科创板",
-        "BJ": "北交所",
+        "BJSE": "北交所",
     }
-    _REVERSE_MARKET_MAP = {v: k for k, v in _MARKET_MAP.items()}
+    _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
+
     _STOCK_LIST_FIELDS = (
         "ts_code,name,industry,market,exchange,curr_type,list_date,delist_date,is_hs"
     )
@@ -92,7 +93,7 @@ class TushareSource(BaseSource):
         self,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
-        market: Optional[str] = None,
+        board: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
@@ -102,28 +103,25 @@ class TushareSource(BaseSource):
         Args:
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
-            market: Market category，supports comma-separated multiple codes
-
-        Optional Description:
-            market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
+            board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, industry, market, exchange,
+            DataFrame with columns: symbol, name, industry, board, exchange,
             curr_type, list_date, delist_date, is_hs, date
         """
-        # Map English market abbreviations to Chinese names for tushare API
-        if market:
+        # Map English board abbreviations to Chinese names for tushare API
+        if board:
             market_names = []
-            for m in market.split(","):
+            for m in board.split(","):
                 m = m.strip()
-                market_names.append(self._MARKET_MAP.get(m, m))
-            market = ",".join(market_names)
+                market_names.append(self._BOARD_MAP.get(m, m))
+            board = ",".join(market_names)
 
         self._rate_limiter.acquire()
         df = self.pro.stock_basic(
             ts_code=symbol,
             exchange=exchange,
-            market=market,
+            market=board,
             list_status="L",
             fields=self._STOCK_LIST_FIELDS,
         )
@@ -132,10 +130,9 @@ class TushareSource(BaseSource):
             return self._empty_stock_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = date.today().strftime("%Y%m%d")
-        # Convert market values from Chinese to English abbreviations
-        df["market"] = df["market"].map(lambda x: self._REVERSE_MARKET_MAP.get(x, x))
-        # Normalize is_hs: H (沪股通) and S (深股通) → Y; N → N
+        df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
         df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
+        df = df.rename(columns={"market": "board"})
         return df
 
     def get_stock_bar(

@@ -28,17 +28,16 @@ class RicequantSource(BaseSource):
         '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '60m': '60m',
     }
 
-    _BOARD_TYPE_MAP = {'MainBoard': 'MB', 'SME': 'MB', 'GEM': 'GEM', 'KSH': 'STAR'}
-    _EXCHANGE_MAP = {'XSHG': 'SSE', 'XSHE': 'SZSE'}
-    _REVERSE_EXCHANGE_MAP = {'SSE': 'XSHG', 'SZSE': 'XSHE'}
+    _EXCHANGE_MAP = {'SSE': 'XSHG', 'SZSE': 'XSHE', 'BJSE': 'BJSE'}
+    _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
-    # hqdata market → rqdatac board_type values
-    _MARKET_FILTER_MAP = {
-        'MB': ['MainBoard', 'SME'],
-        'GEM': ['GEM'],
-        'STAR': ['KSH'],
-        'BJ': [],  # Not supported in rqdatac
+    _BOARD_MAP = {
+        'MB': 'MainBoard',
+        'GEM': 'GEM',
+        'STAR': 'KSH',
+        'BJSE': 'BJSE',
     }
+    _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
     def __init__(
         self,
@@ -62,7 +61,7 @@ class RicequantSource(BaseSource):
         # Try license key first
         resolved_key = license_key or os.environ.get("RQDATA_LICENSE_KEY")
         if resolved_key:
-            rq.init(username="license", password=resolved_key)
+            rq.init(username="license", password=resolved_key, use_zstd=True, enable_bjse=True)
             return
 
         # Fall back to username/password
@@ -85,6 +84,8 @@ class RicequantSource(BaseSource):
             use_pool=True,
             max_pool_size=1,
             auto_load_plugins=False,
+            use_zstd=True,
+            enable_bjse=True
         )
 
     @staticmethod
@@ -129,24 +130,20 @@ class RicequantSource(BaseSource):
         self,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
-        market: Optional[str] = None,
+        board: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
         Note:
-            - BJ (Beijing Stock Exchange) stocks are not supported.
             - Only today's tradable (listed) stocks are returned.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
-            market: Market category, supports comma-separated multiple codes
-
-        Optional Description:
-            market: MB(主板), GEM(创业板), STAR(科创板), BJ(北交所, unsupported)
+            board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, industry, market, exchange,
+            DataFrame with columns: symbol, name, industry, board, exchange,
             curr_type, list_date, delist_date, is_hs, date
         """
         rq = _get_rqdatac()
@@ -166,16 +163,18 @@ class RicequantSource(BaseSource):
 
         if exchange:
             rq_exchanges = [
-                self._REVERSE_EXCHANGE_MAP[e.strip()]
+                self._EXCHANGE_MAP[e.strip()]
                 for e in exchange.split(",")
-                if e.strip() in self._REVERSE_EXCHANGE_MAP
+                if e.strip() in self._EXCHANGE_MAP
             ]
             df = df[df['exchange'].isin(rq_exchanges)].reset_index(drop=True)
 
-        if market:
-            rq_board_types: list = []
-            for m in market.split(","):
-                rq_board_types.extend(self._MARKET_FILTER_MAP.get(m.strip(), []))
+        if board:
+            rq_board_types = [
+                self._BOARD_MAP[m.strip()]
+                for m in board.split(",")
+                if m.strip() in self._BOARD_MAP
+            ]
             df = df[df['board_type'].isin(rq_board_types)].reset_index(drop=True)
 
         if df.empty:
@@ -186,8 +185,8 @@ class RicequantSource(BaseSource):
             'symbol': rq.id_convert(df['order_book_id'].tolist(), to='normal'),
             'name': df['symbol'].tolist(),
             'industry': df['industry_name'].tolist(),
-            'market': df['board_type'].map(self._BOARD_TYPE_MAP).tolist(),
-            'exchange': df['exchange'].map(self._EXCHANGE_MAP).tolist(),
+            'board': df['board_type'].map(self._REVERSE_BOARD_MAP).tolist(),
+            'exchange': df['exchange'].map(self._REVERSE_EXCHANGE_MAP).tolist(),
             'curr_type': 'CNY',
             'list_date': df['listed_date'].tolist(),
             'delist_date': df['de_listed_date'].tolist(),
@@ -281,9 +280,9 @@ class RicequantSource(BaseSource):
             df = df[df['order_book_id'].isin(rq_symbols)].reset_index(drop=True)
         else:
             rq_exchanges = [
-                self._REVERSE_EXCHANGE_MAP[m.strip()]
+                self._EXCHANGE_MAP[m.strip()]
                 for m in market.split(",")
-                if m.strip() in self._REVERSE_EXCHANGE_MAP
+                if m.strip() in self._EXCHANGE_MAP
             ]
             if not rq_exchanges:
                 return self._empty_index_list()
@@ -295,7 +294,7 @@ class RicequantSource(BaseSource):
             'symbol': rq.id_convert(df['order_book_id'].tolist(), to='normal'),
             'name': df['symbol'].tolist(),
             'fullname': df['symbol'].tolist(),  # rqdatac does not provide a separate full name
-            'market': df['exchange'].map(self._EXCHANGE_MAP).tolist(),
+            'market': df['exchange'].map(self._REVERSE_EXCHANGE_MAP).tolist(),
             'base_date': df['base_date'].tolist(),
             'base_point': df['base_point'].tolist(),
             'list_date': df['listed_date'].tolist(),

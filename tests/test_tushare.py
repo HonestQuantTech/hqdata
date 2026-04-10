@@ -44,12 +44,13 @@ class TestTushareIntegration:
     def test_get_stock_list(self):
         """Test get_stock_list returns well-formed data for listed stocks."""
         df = self.source.get_stock_list()
-        expected_columns = {"symbol", "name", "industry", "market", "exchange",
+        expected_columns = {"symbol", "name", "industry", "board", "exchange",
                             "curr_type", "list_date", "delist_date", "is_hs", "date"}
 
         assert not df.empty
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
         assert df["symbol"].is_unique
+        assert df["symbol"].str.match(r"^\d{6}\.(SH|SZ|BJ)$").all(), "symbol format should be xxxxxx.SH/SZ/BJ"
         assert df["date"].str.match(r"^\d{8}$").all(), "date should be in YYYYMMDD format"
         assert df["is_hs"].isin(["Y", "N"]).all(), "is_hs should only contain Y or N"
 
@@ -81,34 +82,34 @@ class TestTushareIntegration:
         has_szse = df["exchange"].str.contains("SZSE").any()
         assert has_sse and has_szse, "Expected both SSE and SZSE in results"
 
-    def test_get_stock_list_by_market(self):
-        """Test get_stock_list with single market filter (MB)."""
-        df = self.source.get_stock_list(market="MB")
-        assert not df.empty, "get_stock_list returned empty DataFrame for market=STAR"
-        assert df["market"].str.contains("MB").all(), "Expected all stocks to be from MB"
+    def test_get_stock_list_by_board(self):
+        """Test get_stock_list with single board filter (MB)."""
+        df = self.source.get_stock_list(board="MB")
+        assert not df.empty, "get_stock_list returned empty DataFrame for board=MB"
+        assert df["board"].str.contains("MB").all(), "Expected all stocks to be from MB"
 
-    def test_get_stock_list_by_multiple_markets(self):
-        """Test get_stock_list with comma-separated multiple markets."""
-        df = self.source.get_stock_list(market="MB,GEM,STAR")
-        assert not df.empty, "get_stock_list returned empty DataFrame for multiple markets"
-        has_mb = df["market"].str.contains("MB").any()
-        has_gem = df["market"].str.contains("GEM").any()
-        has_star = df["market"].str.contains("STAR").any()
+    def test_get_stock_list_by_multiple_boards(self):
+        """Test get_stock_list with comma-separated multiple boards."""
+        df = self.source.get_stock_list(board="MB,GEM,STAR")
+        assert not df.empty, "get_stock_list returned empty DataFrame for multiple boards"
+        has_mb = df["board"].str.contains("MB").any()
+        has_gem = df["board"].str.contains("GEM").any()
+        has_star = df["board"].str.contains("STAR").any()
         assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
 
     def test_get_stock_list_combined_filters(self):
         """Test get_stock_list with multiple filters combined (AND semantics)."""
-        # Two params: market + exchange
-        df2 = self.source.get_stock_list(market="MB", exchange="SSE")
-        assert not df2.empty, "get_stock_list returned empty DataFrame for market=MB,exchange=SSE"
-        assert df2["market"].str.contains("MB").all()
+        # Two params: board + exchange
+        df2 = self.source.get_stock_list(board="MB", exchange="SSE")
+        assert not df2.empty, "get_stock_list returned empty DataFrame for board=MB,exchange=SSE"
+        assert df2["board"].str.contains("MB").all()
         assert df2["exchange"].str.contains("SSE").all()
 
-        # Three params: symbol + market + exchange (all compatible: 000001.SZ is MB on SZSE)
-        df3 = self.source.get_stock_list(symbol="000001.SZ", market="MB", exchange="SZSE")
-        assert not df3.empty, "get_stock_list returned empty DataFrame for symbol+market+exchange"
+        # Three params: symbol + board + exchange (all compatible: 000001.SZ is MB on SZSE)
+        df3 = self.source.get_stock_list(symbol="000001.SZ", board="MB", exchange="SZSE")
+        assert not df3.empty, "get_stock_list returned empty DataFrame for symbol+board+exchange"
         assert "000001.SZ" in df3["symbol"].values
-        assert df3["market"].str.contains("MB").all()
+        assert df3["board"].str.contains("MB").all()
         assert df3["exchange"].str.contains("SZSE").all()
 
     def test_get_stock_bar_single_symbol(self):

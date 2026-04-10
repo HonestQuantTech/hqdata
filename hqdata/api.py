@@ -31,26 +31,23 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
 def get_stock_list(
     symbol: Optional[str] = None,
     exchange: Optional[str] = None,
-    market: Optional[str] = None,
+    board: Optional[str] = None,
 ) -> pd.DataFrame:
     """Get basic info for stocks.
 
     Args:
         symbol: see README, supports comma-separated multiple codes
         exchange: see README, supports comma-separated multiple exchanges
-        market: Market category，supports comma-separated multiple codes
-
-    Optional Description:
-        market: MB(主板),GEM(创业板),STAR(科创板),BJ(北交所)
+        board: see README, supports comma-separated multiple codes
 
     Returns:
-        DataFrame with columns: symbol, name, industry, market, exchange,
+        DataFrame with columns: symbol, name, industry, board, exchange,
         curr_type, list_date, delist_date, is_hs, date
     """
 
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    return _source.get_stock_list(symbol=symbol, exchange=exchange, market=market)
+    return _source.get_stock_list(symbol=symbol, exchange=exchange, board=board)
 
 
 def get_stock_bar(
