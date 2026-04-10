@@ -41,7 +41,7 @@ def get_stock_list(
         board: see README, supports comma-separated multiple codes
 
     Returns:
-        DataFrame with columns: symbol, name, industry, board, exchange,
+        DataFrame with columns: symbol, name, exchange, board, industry,
         curr_type, list_date, delist_date, is_hs, date
     """
 
@@ -85,7 +85,7 @@ def get_index_list(
         market: see README, supports comma-separated multiple markets.
 
     Returns:
-        DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
+        DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date, date
     """
 
     if _source is None:

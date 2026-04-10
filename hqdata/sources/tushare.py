@@ -106,7 +106,7 @@ class TushareSource(BaseSource):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, industry, board, exchange,
+            DataFrame with columns: symbol, name, exchange, board, industry,
             curr_type, list_date, delist_date, is_hs, date
         """
         # Map English board abbreviations to Chinese names for tushare API
@@ -133,7 +133,9 @@ class TushareSource(BaseSource):
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
         df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
-        return df
+        cols = ['symbol', 'name', 'exchange', 'board', 'industry',
+                   'curr_type', 'list_date', 'delist_date', 'is_hs', 'date']
+        return df[cols]
 
     def get_stock_bar(
         self,
@@ -182,7 +184,7 @@ class TushareSource(BaseSource):
             market: see README, supports comma-separated multiple markets.
 
         Returns:
-            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
+            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date, date
         """
         use_symbol = symbol and symbol.strip()
         use_market = market and market.strip() if not use_symbol else None
@@ -212,6 +214,7 @@ class TushareSource(BaseSource):
         if df is None or df.empty:
             return self._empty_index_list()
         df = self._rename_columns(df).sort_values("symbol")
+        df["date"] = date.today().strftime("%Y%m%d")
         return df
 
     def get_index_bar(

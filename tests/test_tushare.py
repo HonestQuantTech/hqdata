@@ -149,7 +149,7 @@ class TestTushareIntegration:
 
     def test_get_index_list_single_symbol(self):
         """Test get_index_list with single symbol."""
-        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date", "date"}
 
         df = self.source.get_index_list(symbol="000300.SH")
         assert not df.empty, "get_index_list returned empty DataFrame for single symbol"
@@ -159,7 +159,7 @@ class TestTushareIntegration:
 
     def test_get_index_list_multiple_symbols(self):
         """Test get_index_list with comma-separated multiple symbols."""
-        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date", "date"}
 
         symbols = "000300.SH,000905.SH"
         df = self.source.get_index_list(symbol=symbols)
@@ -169,7 +169,7 @@ class TestTushareIntegration:
 
     def test_get_index_list_single_market(self):
         """Test get_index_list with single market."""
-        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date", "date"}
 
         df = self.source.get_index_list(market="SSE")
         assert not df.empty, "get_index_list returned empty DataFrame for SSE market"
@@ -178,7 +178,7 @@ class TestTushareIntegration:
 
     def test_get_index_list_multiple_markets(self):
         """Test get_index_list with comma-separated multiple markets."""
-        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date", "date"}
 
         markets = "SSE,SZSE"
         df = self.source.get_index_list(market=markets)
@@ -191,7 +191,7 @@ class TestTushareIntegration:
 
     def test_get_index_list_symbol_ignores_market(self):
         """Test that symbol takes precedence over market (market is ignored when symbol is provided)."""
-        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date", "date"}
 
         # When symbol is provided, market should be ignored
         df = self.source.get_index_list(symbol="000300.SH", market="SZSE")
@@ -202,7 +202,7 @@ class TestTushareIntegration:
 
     def test_get_index_list_without_params(self):
         """Test get_index_list returns all indexes when no params provided."""
-        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date"}
+        expected_columns = {"symbol", "name", "fullname", "market", "base_date", "base_point", "list_date", "date"}
         df = self.source.get_index_list()
         assert not df.empty, "get_index_list returned empty DataFrame with no params"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"

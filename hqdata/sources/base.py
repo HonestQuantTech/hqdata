@@ -19,7 +19,7 @@ class BaseSource(ABC):
     @staticmethod
     def _empty_stock_list() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'name', 'industry', 'board', 'exchange',
+            'symbol', 'name', 'exchange', 'board', 'industry',
             'curr_type', 'list_date', 'delist_date', 'is_hs', 'date',
         ])
 
@@ -33,7 +33,7 @@ class BaseSource(ABC):
     @staticmethod
     def _empty_index_list() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date',
+            'symbol', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date', 'date',
         ])
 
     @staticmethod
@@ -58,7 +58,7 @@ class BaseSource(ABC):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, industry, board, exchange,
+            DataFrame with columns: symbol, name, exchange, board, industry,
             curr_type, list_date, delist_date, is_hs, date
         """
         pass
@@ -97,7 +97,7 @@ class BaseSource(ABC):
             market: see README, supports comma-separated multiple markets.
 
         Returns:
-            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date
+            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date, date
         """
         pass
 
