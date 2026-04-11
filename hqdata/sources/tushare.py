@@ -89,6 +89,33 @@ class TushareSource(BaseSource):
             "amount": "turnover",
         })
 
+    def get_calendar(
+        self,
+        start_date: str,
+        end_date: str,
+        is_open: Optional[bool] = None,
+    ) -> pd.DataFrame:
+        """Get trading calendar.
+
+        Args:
+            start_date: see README
+            end_date: see README
+            is_open: see README
+
+        Returns:
+            DataFrame with columns: date, is_open
+        """
+        self._rate_limiter.acquire()
+        df = self.pro.trade_cal(start_date=start_date, end_date=end_date)
+        if df is None or df.empty:
+            return self._empty_calendar()
+        df = df.rename(columns={'cal_date': 'date'})
+        df['is_open'] = df['is_open'].map({1: 'Y', 0: 'N'})
+        if is_open is not None:
+            filter_val = 'Y' if is_open else 'N'
+            df = df[df['is_open'] == filter_val]
+        return df[['date', 'is_open']].sort_values('date').reset_index(drop=True)
+
     def get_stock_list(
         self,
         symbol: Optional[str] = None,

@@ -43,6 +43,29 @@ class BaseSource(ABC):
             'pre_close', 'change', 'pct_change', 'volume', 'turnover',
         ])
 
+    @staticmethod
+    def _empty_calendar() -> pd.DataFrame:
+        return pd.DataFrame(columns=['date', 'is_open'])
+
+    @abstractmethod
+    def get_calendar(
+        self,
+        start_date: str,
+        end_date: str,
+        is_open: Optional[bool] = None,
+    ) -> pd.DataFrame:
+        """Get trading calendar.
+
+        Args:
+            start_date: see README
+            end_date: see README
+            is_open: see README
+
+        Returns:
+            DataFrame with columns: date, is_open
+        """
+        pass
+
     @abstractmethod
     def get_stock_list(
         self,

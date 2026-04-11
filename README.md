@@ -61,10 +61,15 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 以 Tushare/米筐为例 为例：
 
 ```python
-from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
+from hqdata import init_source, get_calendar, get_stock_list, get_stock_bar, get_index_list, get_index_bar
 
 # 初始化 Tushare 
 init_source("tushare") # 如果使用米筐数据源则将"tushare"替换为"ricequant"，其它数据源同理
+
+# 查询交易日历
+get_calendar("20260301", "20260401") # 返回[20260301, 20260401]内所有自然日，不筛选
+get_calendar("20260301", "20260401", is_open=True) # 只返回交易日
+get_calendar("20260301", "20260401", is_open=False) # 只返回非交易日
 
 # 查询当日股票列表
 get_stock_list() # 返回所有股票
@@ -107,14 +112,14 @@ pytest tests/test_tushare.py::TestTushareIntegration::test_get_stock_bar_single_
 
 symbol 参数统一使用 `交易所简写代码` 作为后缀：
 
-| 交易所 | 交易所简写代码 | 示例        |
+| 交易所 | 交易所简写代码 | symbol示例  |
 | ------ | -------------- | ----------- |
-| 上交所 | SH             | `600000.SH` |
-| 深交所 | SZ             | `000001.SZ` |
+| 上交所 | SH             | "600000.SH" |
+| 深交所 | SZ             | "000001.SZ" |
 
 ### start_date / end_date（日期区间）
 
-日期格式为 `YYYYMMDD`，如 `20260401` 表示 2026年4月1日。
+日期格式为 `YYYYMMDD`，如 `"20260401"` 表示 2026年4月1日。
 
 - `start_date`：开始日期（包含）
 - `end_date`：结束日期（包含）
@@ -123,45 +128,53 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀：
 
 | 值      | 说明         |
 | ------- | ------------ |
-| `tick`  | 实时         |
-| `1m`    | 1分钟线      |
-| `5m`    | 5分钟线      |
-| `15m`   | 15分钟线     |
-| `30m`   | 30分钟线     |
-| `60m`   | 60分钟线     |
-| `day`   | 日线（默认） |
-| `week`  | 周线         |
-| `month` | 月线         |
+| "tick"  | 实时         |
+| "1m"    | 1分钟线      |
+| "5m"    | 5分钟线      |
+| "15m"   | 15分钟线     |
+| "30m"   | 30分钟线     |
+| "60m"   | 60分钟线     |
+| "day"   | 日线（默认） |
+| "week"  | 周线         |
+| "month" | 月线         |
 
 ### exchange（交易所）
 
-| 交易所 | 代码 | 说明           |
-| ------ | ---- | -------------- |
-| 上交所 | SSE  | 上海证券交易所 |
-| 深交所 | SZSE | 深圳证券交易所 |
-| 北交所 | BSE  | 北京证券交易所 |
+| 代码   | 说明           |
+| ------ | -------------- |
+| "SSE"  | 上海证券交易所 |
+| "SZSE" | 深圳证券交易所 |
+| "BSE"  | 北京证券交易所 |
+
+### is_open（是否交易日）
+
+| 值    | 说明                   |
+| ----- | ---------------------- |
+| None  | 返回所有自然日（默认） |
+| True  | 只返回交易日           |
+| False | 只返回非交易日         |
 
 ### board（股票板块）
 
 | 值     | 说明   |
 | ------ | ------ |
-| `MB`   | 主板   |
-| `GEM`  | 创业板 |
-| `STAR` | 科创板 |
-| `BJSE` | 北交所 |
+| "MB"   | 主板   |
+| "GEM"  | 创业板 |
+| "STAR" | 科创板 |
+| "BJSE" | 北交所 |
 
 ### market（指数市场）
 
 | 值     | 说明       | 支持源       |
 | ------ | ---------- | ------------ |
-| `CSI`  | 中证指数   | Tushare      |
-| `CICC` | 中金指数   | Tushare      |
-| `SSE`  | 上交所指数 | Tushare,米筐 |
-| `SZSE` | 深交所指数 | Tushare,米筐 |
-| `BJSE` | 北交所指数 | 米筐         |
-| `SW`   | 申万指数   | Tushare      |
-| `MSCI` | MSCI 指数  | Tushare      |
-| `OTH`  | 其他指数   | Tushare      |
+| "CSI"  | 中证指数   | Tushare      |
+| "CICC" | 中金指数   | Tushare      |
+| "SSE"  | 上交所指数 | Tushare,米筐 |
+| "SZSE" | 深交所指数 | Tushare,米筐 |
+| "BJSE" | 北交所指数 | 米筐         |
+| "SW"   | 申万指数   | Tushare      |
+| "MSCI" | MSCI 指数  | Tushare      |
+| "OTH"  | 其他指数   | Tushare      |
 
 特性说明：
 

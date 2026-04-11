@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hqdata"
-version = "0.1.10"
+version = "0.1.11"
 description = "A股历史与实时行情数据统一接入、清洗与存储"
 readme = "README.md"
 authors = [

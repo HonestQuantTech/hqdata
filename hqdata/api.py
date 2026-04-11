@@ -28,6 +28,26 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
         raise ValueError(f"Unknown source type: {source_type}")
 
 
+def get_calendar(
+    start_date: str,
+    end_date: str,
+    is_open: Optional[bool] = None,
+) -> pd.DataFrame:
+    """Get trading calendar.
+
+    Args:
+        start_date: see README
+        end_date: see README
+        is_open: see README
+
+    Returns:
+        DataFrame with columns: date, is_open
+    """
+    if _source is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _source.get_calendar(start_date, end_date, is_open)
+
+
 def get_stock_list(
     symbol: Optional[str] = None,
     exchange: Optional[str] = None,

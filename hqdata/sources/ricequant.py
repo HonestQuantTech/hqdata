@@ -1,7 +1,7 @@
 """Ricequant (米筐) data source adapter"""
 
 import os
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Optional
 import pandas as pd
 
@@ -125,6 +125,37 @@ class RicequantSource(BaseSource):
             if df is not None:
                 return set(df.index.get_level_values('order_book_id').unique())
         return set()
+
+    def get_calendar(
+        self,
+        start_date: str,
+        end_date: str,
+        is_open: Optional[bool] = None,
+    ) -> pd.DataFrame:
+        """Get trading calendar.
+
+        Args:
+            start_date: see README
+            end_date: see README
+            is_open: see README
+
+        Returns:
+            DataFrame with columns: date, is_open
+        """
+        rq = _get_rqdatac()
+        start = datetime.strptime(start_date, '%Y%m%d').date()
+        end = datetime.strptime(end_date, '%Y%m%d').date()
+        trading_dates = set(rq.get_trading_dates(start_date, end_date, market='cn'))
+        all_dates, is_open_list = [], []
+        cur = start
+        while cur <= end:
+            all_dates.append(cur.strftime('%Y%m%d'))
+            is_open_list.append('Y' if cur in trading_dates else 'N')
+            cur += timedelta(days=1)
+        df = pd.DataFrame({'date': all_dates, 'is_open': is_open_list})
+        if is_open is not None:
+            df = df[df['is_open'] == ('Y' if is_open else 'N')].reset_index(drop=True)
+        return df
 
     def get_stock_list(
         self,

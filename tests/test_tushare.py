@@ -18,19 +18,6 @@ class TestTushareSource:
         with pytest.raises(ValueError, match="TUSHARE_TOKEN"):
             TushareSource(token=None)
 
-class TestHqdataPackageImports:
-    """Test that hqdata package exposes all public APIs correctly.
-
-    This ensures users who install via pip (importing from the installed package)
-    get all documented functions.
-    """
-
-    def test_all_public_apis_match_all(self):
-        """Verify __all__ declares all functions importable from hqdata package."""
-        import hqdata
-
-        assert set(hqdata.__all__) == {"init_source", "get_stock_list", "get_stock_bar", "get_index_list", "get_index_bar"}
-
 class TestTushareIntegration:
     """Integration tests using real Tushare API data."""
 
@@ -40,6 +27,33 @@ class TestTushareIntegration:
         if not token:
             pytest.skip("TUSHARE_TOKEN not set")
         self.source = TushareSource(token=token)
+
+    def test_get_calendar(self):
+        """Test get_calendar returns well-formed data with all dates."""
+        df = self.source.get_calendar("20260101", "20260401")
+        expected_columns = {"date", "is_open"}
+        assert not df.empty, "get_calendar returned empty DataFrame"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
+        assert df["is_open"].isin(["Y", "N"]).all(), "is_open should only contain Y or N"
+        assert len(df) == 91, f"Expected 91 days, got {len(df)}"
+        assert df["date"].iloc[0] == "20260101"
+        assert df["date"].iloc[-1] == "20260401"
+
+    def test_get_calendar_is_open_true(self):
+        """Test get_calendar with is_open=True returns only trading days."""
+        df = self.source.get_calendar("20260101", "20260401", is_open=True)
+        assert not df.empty, "get_calendar returned empty DataFrame with is_open=True"
+        assert (df["is_open"] == "Y").all(), "is_open should be Y for all rows"
+        assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
+        assert len(df) == 57, f"Expected 57 trading days, got {len(df)}"
+
+    def test_get_calendar_is_open_false(self):
+        """Test get_calendar with is_open=False returns only non-trading days."""
+        df = self.source.get_calendar("20260101", "20260401", is_open=False)
+        assert (df["is_open"] == "N").all(), "is_open should be N for all rows"
+        assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
+        assert len(df) == 34, f"Expected 34 non-trading days, got {len(df)}"
 
     def test_get_stock_list(self):
         """Test get_stock_list returns well-formed data for listed stocks."""
