@@ -24,9 +24,15 @@ class BaseSource(ABC):
         ])
 
     @staticmethod
-    def _empty_stock_bar() -> pd.DataFrame:
+    def _empty_stock_minute_bar() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'high', 'low', 'close',
+            'symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover',
+        ])
+
+    @staticmethod
+    def _empty_stock_daily_bar() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'date', 'open', 'close', 'high', 'low',
             'pre_close', 'change', 'pct_change', 'volume', 'turnover',
         ])
 
@@ -37,9 +43,15 @@ class BaseSource(ABC):
         ])
 
     @staticmethod
-    def _empty_index_bar() -> pd.DataFrame:
+    def _empty_index_minute_bar() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'high', 'low', 'close',
+            'symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover',
+        ])
+
+    @staticmethod
+    def _empty_index_daily_bar() -> pd.DataFrame:
+        return pd.DataFrame(columns=[
+            'symbol', 'date', 'open', 'close', 'high', 'low',
             'pre_close', 'change', 'pct_change', 'volume', 'turnover',
         ])
 
@@ -87,23 +99,42 @@ class BaseSource(ABC):
         pass
 
     @abstractmethod
-    def get_stock_bar(
+    def get_stock_minute_bar(
         self,
         symbol: str,
-        frequency: str = "day",
+        frequency: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get K-line/bar data for stocks.
+        """Get minute bar data for stocks.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
-            frequency: see README
+            frequency: one of "1m", "5m", "15m", "30m", "60m"
             start_date: see README
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+        """
+        pass
+
+    @abstractmethod
+    def get_stock_daily_bar(
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get daily bar data for stocks.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            start_date: see README
+            end_date: see README
+
+        Returns:
+            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
         """
         pass
 
@@ -125,13 +156,34 @@ class BaseSource(ABC):
         pass
 
     @abstractmethod
-    def get_index_bar(
+    def get_index_minute_bar(
+        self,
+        symbol: str,
+        frequency: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get minute bar data for an index.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            frequency: one of "1m", "5m", "15m", "30m", "60m"
+            start_date: see README
+            end_date: see README
+
+        Returns:
+            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+        """
+        pass
+
+    @abstractmethod
+    def get_index_daily_bar(
         self,
         symbol: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get daily bar data for an index or multiple indexes.
+        """Get daily bar data for an index.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
@@ -139,6 +191,6 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
         """
         pass

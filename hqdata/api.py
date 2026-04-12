@@ -64,35 +64,58 @@ def get_stock_list(
         DataFrame with columns: symbol, name, exchange, board, industry,
         curr_type, list_date, delist_date, is_hs, date
     """
-
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     return _source.get_stock_list(symbol=symbol, exchange=exchange, board=board)
 
 
-def get_stock_bar(
+def get_stock_minute_bar(
     symbol: str,
-    frequency: str = "day",
+    frequency: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Get K-line/bar data for stocks.
+    """Get minute bar data for stocks.
 
     Args:
         symbol: see README, supports comma-separated multiple codes
-        frequency: see README
+        frequency: one of "1m", "5m", "15m", "30m", "60m"
         start_date: see README
         end_date: see README
 
     Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
+        DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     today = date.today().strftime("%Y%m%d")
     start_date = start_date or today
     end_date = end_date or today
-    return _source.get_stock_bar(symbol, frequency, start_date, end_date)
+    return _source.get_stock_minute_bar(symbol, frequency, start_date, end_date)
+
+
+def get_stock_daily_bar(
+    symbol: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> pd.DataFrame:
+    """Get daily bar data for stocks.
+
+    Args:
+        symbol: see README, supports comma-separated multiple codes
+        start_date: see README
+        end_date: see README
+
+    Returns:
+        DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+    """
+    if _source is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    today = date.today().strftime("%Y%m%d")
+    start_date = start_date or today
+    end_date = end_date or today
+    return _source.get_stock_daily_bar(symbol, start_date, end_date)
+
 
 def get_index_list(
     symbol: Optional[str] = None,
@@ -107,30 +130,54 @@ def get_index_list(
     Returns:
         DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date, date
     """
-
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     return _source.get_index_list(symbol, market)
 
-def get_index_bar(
+
+def get_index_minute_bar(
     symbol: str,
+    frequency: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Get daily bar data for an index or multiple indexes.
+    """Get minute bar data for an index.
 
     Args:
         symbol: see README, supports comma-separated multiple codes
+        frequency: one of "1m", "5m", "15m", "30m", "60m"
         start_date: see README
         end_date: see README
-        
-    Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
-    """
 
+    Returns:
+        DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+    """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     today = date.today().strftime("%Y%m%d")
     start_date = start_date or today
     end_date = end_date or today
-    return _source.get_index_bar(symbol, start_date, end_date)
+    return _source.get_index_minute_bar(symbol, frequency, start_date, end_date)
+
+
+def get_index_daily_bar(
+    symbol: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> pd.DataFrame:
+    """Get daily bar data for an index.
+
+    Args:
+        symbol: see README, supports comma-separated multiple codes
+        start_date: see README
+        end_date: see README
+
+    Returns:
+        DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+    """
+    if _source is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    today = date.today().strftime("%Y%m%d")
+    start_date = start_date or today
+    end_date = end_date or today
+    return _source.get_index_daily_bar(symbol, start_date, end_date)

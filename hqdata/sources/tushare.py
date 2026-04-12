@@ -164,36 +164,86 @@ class TushareSource(BaseSource):
                    'curr_type', 'list_date', 'delist_date', 'is_hs', 'date']
         return df[cols]
 
-    def get_stock_bar(
+    _MINUTE_FREQ_MAP = {
+        "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "60min",
+    }
+
+    @staticmethod
+    def _normalize_minute_bar(df: pd.DataFrame, symbol_col: str = "ts_code") -> pd.DataFrame:
+        """Convert Tushare minute bar to standard format."""
+        df = df.rename(columns={
+            symbol_col: "symbol",
+            "trade_time": "datetime_raw",
+            "vol": "volume",
+            "amount": "turnover",
+        })
+        # trade_time format: "2024-01-02 09:31:00"
+        df["date"] = df["datetime_raw"].str.replace("-", "").str[:8]
+        df["datetime"] = df["datetime_raw"].str.replace("-", "").str.replace(" ", "T").str.replace(":", "") + "000"
+        cols = ["symbol", "date", "datetime", "open", "close", "high", "low", "volume", "turnover"]
+        return df[cols].sort_values(["symbol", "datetime"]).reset_index(drop=True)
+
+    def get_stock_minute_bar(
         self,
         symbol: str,
-        frequency: str = "day",
+        frequency: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get K-line/bar data for stocks.
+        """Get minute bar data for stocks.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
-            frequency: see README
+            frequency: one of "1m", "5m", "15m", "30m", "60m"
             start_date: see README
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
         """
-        if frequency != "day":
-            raise NotImplementedError(
-                f"Tushare only supports 'day' frequency, got '{frequency}'"
-            )
+        if frequency not in self._MINUTE_FREQ_MAP:
+            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
+        freq = self._MINUTE_FREQ_MAP[frequency]
+        start_dt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]} 00:00:00" if start_date else None
+        end_dt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]} 23:59:59" if end_date else None
 
+        symbols = [s.strip() for s in symbol.split(",")]
+        dfs = []
+        for s in symbols:
+            self._rate_limiter.acquire()
+            d = self.pro.stk_mins(ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt)
+            if d is not None and not d.empty:
+                dfs.append(d)
+        df = pd.concat(dfs, ignore_index=True) if dfs else None
+
+        if df is None or df.empty:
+            return self._empty_stock_minute_bar()
+        return self._normalize_minute_bar(df)
+
+    def get_stock_daily_bar(
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get daily bar data for stocks.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            start_date: see README
+            end_date: see README
+
+        Returns:
+            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+        """
         self._rate_limiter.acquire()
         df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
 
         if df is None or df.empty:
-            return self._empty_stock_bar()
+            return self._empty_stock_daily_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
-        return df
+        cols = ["symbol", "date", "open", "close", "high", "low", "pre_close", "change", "pct_change", "volume", "turnover"]
+        return df[cols].reset_index(drop=True)
 
     _INDEX_LIST_FIELDS = (
         "ts_code,name,fullname,market,base_date,base_point,list_date"
@@ -244,7 +294,44 @@ class TushareSource(BaseSource):
         df["date"] = date.today().strftime("%Y%m%d")
         return df
 
-    def get_index_bar(
+    def get_index_minute_bar(
+        self,
+        symbol: str,
+        frequency: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get minute bar data for an index.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            frequency: one of "1m", "5m", "15m", "30m", "60m"
+            start_date: see README
+            end_date: see README
+
+        Returns:
+            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+        """
+        if frequency not in self._MINUTE_FREQ_MAP:
+            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
+        freq = self._MINUTE_FREQ_MAP[frequency]
+        start_dt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]} 00:00:00" if start_date else None
+        end_dt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]} 23:59:59" if end_date else None
+
+        symbols = [s.strip() for s in symbol.split(",")]
+        dfs = []
+        for s in symbols:
+            self._rate_limiter.acquire()
+            d = self.pro.idx_mins(ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt)
+            if d is not None and not d.empty:
+                dfs.append(d)
+        df = pd.concat(dfs, ignore_index=True) if dfs else None
+
+        if df is None or df.empty:
+            return self._empty_index_minute_bar()
+        return self._normalize_minute_bar(df)
+
+    def get_index_daily_bar(
         self,
         symbol: str,
         start_date: Optional[str] = None,
@@ -258,7 +345,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
         """
         symbols = [s.strip() for s in symbol.split(",")]
         dfs = []
@@ -270,6 +357,7 @@ class TushareSource(BaseSource):
         df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:
-            return self._empty_index_bar()
+            return self._empty_index_daily_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
-        return df
+        cols = ["symbol", "date", "open", "close", "high", "low", "pre_close", "change", "pct_change", "volume", "turnover"]
+        return df[cols].reset_index(drop=True)

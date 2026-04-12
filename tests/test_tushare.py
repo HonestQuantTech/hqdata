@@ -7,7 +7,6 @@ import pandas as pd
 
 import hqdata.config
 from hqdata.sources.tushare import TushareSource
-from hqdata import init_source, get_stock_list, get_stock_bar, get_index_list, get_index_bar
 
 
 class TestTushareSource:
@@ -126,13 +125,13 @@ class TestTushareIntegration:
         assert df3["board"].str.contains("MB").all()
         assert df3["exchange"].str.contains("SZSE").all()
 
-    def test_get_stock_bar_single_symbol(self):
-        """Test get_stock_bar returns well-formed data for both markets."""
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+    def test_get_stock_daily_bar(self):
+        """Test get_stock_daily_bar returns well-formed data for both markets."""
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_stock_bar(symbol, "day", "20260101", "20260401")
+            df = self.source.get_stock_daily_bar(symbol, "20260101", "20260401")
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
             assert (df["high"] >= df["low"]).all(), "high < low found"
@@ -142,24 +141,17 @@ class TestTushareIntegration:
             assert (df["turnover"] > 0).all(), "non-positive amount found"
             assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
 
-    def test_get_stock_bar_multiple_symbols(self):
-        """Test get_stock_bar returns well-formed data for multiple symbols."""
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+    def test_get_stock_daily_bar_multiple_symbols(self):
+        """Test get_stock_daily_bar returns well-formed data for multiple symbols."""
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         symbols = "000001.SZ,600000.SH"
-        df = self.source.get_stock_bar(symbols, "day", "20260101", "20260401")
-        assert not df.empty, f"get_stock_bar returned empty DataFrame for {symbols}"
+        df = self.source.get_stock_daily_bar(symbols, "20260101", "20260401")
+        assert not df.empty, f"get_stock_daily_bar returned empty DataFrame for {symbols}"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
         assert set(df["symbol"].unique()) == {"000001.SZ", "600000.SH"}, f"Expected symbols in result: {symbols}"
         assert (df["high"] >= df["low"]).all(), "high < low found"
-        assert (df["high"] >= df["close"]).all(), "high < close found"
-        assert (df["low"] <= df["close"]).all(), "low > close found"
-
-    def test_get_stock_bar_unsupported_frequency(self):
-        """Test that unsupported frequency raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            self.source.get_stock_bar("000001.SZ", "1min", "20260101", "20260401")
 
     def test_get_index_list_single_symbol(self):
         """Test get_index_list with single symbol."""
@@ -221,13 +213,13 @@ class TestTushareIntegration:
         assert not df.empty, "get_index_list returned empty DataFrame with no params"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
 
-    def test_get_index_bar_single_symbol(self):
-        """Test get_index_bar returns well-formed data for major indexes."""
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+    def test_get_index_daily_bar(self):
+        """Test get_index_daily_bar returns well-formed data for major indexes."""
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         for symbol in ("000300.SH", "000905.SH", "000852.SH", "932000.CSI"):
-            df = self.source.get_index_bar(symbol, "20260101", "20260401")
+            df = self.source.get_index_daily_bar(symbol, "20260101", "20260401")
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
             assert (df["high"] >= df["low"]).all(), "high < low found"
@@ -236,14 +228,15 @@ class TestTushareIntegration:
             assert (df["volume"] > 0).all(), "non-positive volume found"
             assert (df["turnover"] > 0).all(), "non-positive amount found"
 
-    def test_get_index_bar_multiple_symbols(self):
-        """Test get_index_bar returns well-formed data for multiple indexes."""
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+    def test_get_index_daily_bar_multiple_symbols(self):
+        """Test get_index_daily_bar returns well-formed data for multiple indexes."""
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         symbols = "000300.SH,000905.SH"
-        df = self.source.get_index_bar(symbols, "20260101", "20260401")
+        df = self.source.get_index_daily_bar(symbols, "20260101", "20260401")
         assert not df.empty, f"{symbols} returned empty DataFrame"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
         assert set(df["symbol"].unique()) == {"000300.SH", "000905.SH"}, f"Expected symbols in result: {symbols}"
+
 

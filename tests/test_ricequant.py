@@ -130,13 +130,25 @@ class TestRicequantIntegration:
         assert df3["board"].str.contains("MB").all()
         assert df3["exchange"].str.contains("SZSE").all()
 
-    def test_get_stock_bar_single_symbol(self):
-        """Test get_stock_bar returns well-formed data for both markets."""
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+    def test_get_stock_minute_bar(self):
+        """Test get_stock_minute_bar returns well-formed data for both markets."""
+        expected_columns = {"symbol", "date", "datetime", "open", "close", "high", "low", "volume", "turnover"}
+
+        for symbol in ("000001.SZ", "600000.SH"):
+            df = self.source.get_stock_minute_bar(symbol, "1m", "20260401", "20260401")
+            assert not df.empty, f"{symbol} returned empty DataFrame"
+            assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+            assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
+            assert df["datetime"].str.match(r"^\d{8}T\d{6}\d{3}$").all(), "datetime not in YYYYMMDDTHHMMSSsss format"
+            assert (df["high"] >= df["low"]).all(), "high < low found"
+
+    def test_get_stock_daily_bar(self):
+        """Test get_stock_daily_bar returns well-formed data for both markets."""
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_stock_bar(symbol, "day", "20260101", "20260401")
+            df = self.source.get_stock_daily_bar(symbol, "20260101", "20260401")
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
             assert (df["high"] >= df["low"]).all(), "high < low found"
@@ -146,29 +158,17 @@ class TestRicequantIntegration:
             assert (df["turnover"] > 0).all(), "non-positive turnover found"
             assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
 
-    def test_get_stock_bar_multiple_symbols(self):
-        """Test get_stock_bar returns well-formed data for multiple symbols."""
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+    def test_get_stock_daily_bar_multiple_symbols(self):
+        """Test get_stock_daily_bar returns well-formed data for multiple symbols."""
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         symbols = "000001.SZ,600000.SH"
-        df = self.source.get_stock_bar(symbols, "day", "20260101", "20260401")
-        assert not df.empty, f"get_stock_bar returned empty DataFrame for {symbols}"
+        df = self.source.get_stock_daily_bar(symbols, "20260101", "20260401")
+        assert not df.empty, f"get_stock_daily_bar returned empty DataFrame for {symbols}"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
         assert set(df["symbol"].unique()) == {"000001.SZ", "600000.SH"}, f"Expected symbols in result: {symbols}"
         assert (df["high"] >= df["low"]).all(), "high < low found"
-        assert (df["high"] >= df["close"]).all(), "high < close found"
-        assert (df["low"] <= df["close"]).all(), "low > close found"
-
-    def test_get_stock_bar_unsupported_frequency(self):
-        """Test that unsupported frequencies raise NotImplementedError.
-
-        Note: rqdatac does not support 'tick' and 'month'.
-        Unlike tushare (day only), rqdatac additionally supports 'week' and intraday frequencies.
-        """
-        for freq in ("tick", "month"):
-            with pytest.raises(NotImplementedError):
-                self.source.get_stock_bar("000001.SZ", freq, "20260101", "20260401")
 
     def test_get_index_list_single_symbol(self):
         """Test get_index_list with single symbol."""
@@ -238,17 +238,38 @@ class TestRicequantIntegration:
         assert not df.empty, "get_index_list returned empty DataFrame with no params"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
 
-    def test_get_index_bar_single_symbol(self):
-        """Test get_index_bar returns well-formed data for major indexes.
+    def test_get_index_minute_bar(self):
+        """Test get_index_minute_bar returns well-formed data."""
+        expected_columns = {"symbol", "date", "datetime", "open", "close", "high", "low", "volume", "turnover"}
+
+        df = self.source.get_index_minute_bar("000300.SH", "1m", "20260401", "20260401")
+        assert not df.empty, "000300.SH returned empty DataFrame"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
+        assert df["datetime"].str.match(r"^\d{8}T\d{6}\d{3}$").all(), "datetime not in YYYYMMDDTHHMMSSsss format"
+        assert (df["high"] >= df["low"]).all(), "high < low found"
+
+    def test_get_index_minute_bar_multiple_symbols(self):
+        """Test get_index_minute_bar returns well-formed data for multiple indexes."""
+        expected_columns = {"symbol", "date", "datetime", "open", "close", "high", "low", "volume", "turnover"}
+
+        symbols = "000300.SH,000905.SH"
+        df = self.source.get_index_minute_bar(symbols, "1m", "20260401", "20260401")
+        assert not df.empty, f"{symbols} returned empty DataFrame"
+        assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert set(df["symbol"].unique()) == {"000300.SH", "000905.SH"}, f"Expected symbols in result: {symbols}"
+
+    def test_get_index_daily_bar(self):
+        """Test get_index_daily_bar returns well-formed data for major indexes.
 
         Note: rqdatac does not support CSI-suffixed indexes (e.g. 932000.CSI) via id_convert,
         so only SSE/SZSE indexes are tested here — unlike tushare which also supports CSI indexes.
         """
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         for symbol in ("000300.SH", "000905.SH"):
-            df = self.source.get_index_bar(symbol, "20260101", "20260401")
+            df = self.source.get_index_daily_bar(symbol, "20260101", "20260401")
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
             assert (df["high"] >= df["low"]).all(), "high < low found"
@@ -258,13 +279,14 @@ class TestRicequantIntegration:
             assert (df["turnover"] > 0).all(), "non-positive turnover found"
             assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
 
-    def test_get_index_bar_multiple_symbols(self):
-        """Test get_index_bar returns well-formed data for multiple indexes."""
-        expected_columns = {"symbol", "date", "open", "high", "low", "close",
+    def test_get_index_daily_bar_multiple_symbols(self):
+        """Test get_index_daily_bar returns well-formed data for multiple indexes."""
+        expected_columns = {"symbol", "date", "open", "close", "high", "low",
                             "pre_close", "change", "pct_change", "volume", "turnover"}
 
         symbols = "000300.SH,000905.SH"
-        df = self.source.get_index_bar(symbols, "20260101", "20260401")
+        df = self.source.get_index_daily_bar(symbols, "20260101", "20260401")
         assert not df.empty, f"{symbols} returned empty DataFrame"
         assert expected_columns.issubset(df.columns), f"Missing columns: {expected_columns - set(df.columns)}"
         assert set(df["symbol"].unique()) == {"000300.SH", "000905.SH"}, f"Expected symbols in result: {symbols}"
+

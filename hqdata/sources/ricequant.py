@@ -23,11 +23,6 @@ class RicequantSource(BaseSource):
     - Username/password: Set username/password parameters or RQDATA_USERNAME/RQDATA_PASSWORD env vars
     """
 
-    _FREQUENCY_MAP = {
-        'day': '1d', 'week': '1w',
-        '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '60m': '60m',
-    }
-
     _EXCHANGE_MAP = {'SSE': 'XSHG', 'SZSE': 'XSHE', 'BJSE': 'BJSE'}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
@@ -89,20 +84,26 @@ class RicequantSource(BaseSource):
         )
 
     @staticmethod
-    def _normalize_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
-        """Convert get_price() output to hqdata standard bar format.
+    def _normalize_minute_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
+        """Convert get_price() minute output to hqdata standard minute bar format."""
+        df = df.reset_index()
+        df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
+        df['date'] = df['datetime'].dt.strftime('%Y%m%d')
+        df['datetime'] = df['datetime'].dt.strftime('%Y%m%dT%H%M%S') + '000'
+        df = df.rename(columns={'total_turnover': 'turnover'})
+        cols = ['symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover']
+        return df[cols].sort_values(['symbol', 'datetime']).reset_index(drop=True)
 
-        get_price with a list of order_book_ids returns a MultiIndex DataFrame
-        with (order_book_id, date) as index. This method flattens it and
-        normalizes all column names and values to hqdata conventions.
-        """
+    @staticmethod
+    def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
+        """Convert get_price() daily output to hqdata standard daily bar format."""
         df = df.reset_index()
         df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
         df['date'] = df['date'].dt.strftime('%Y%m%d')
         df = df.rename(columns={'total_turnover': 'turnover', 'prev_close': 'pre_close'})
         df['change'] = (df['close'] - df['pre_close']).round(4)
         df['pct_change'] = ((df['change'] / df['pre_close']) * 100).round(4)
-        cols = ['symbol', 'date', 'open', 'high', 'low', 'close',
+        cols = ['symbol', 'date', 'open', 'close', 'high', 'low',
                 'pre_close', 'change', 'pct_change', 'volume', 'turnover']
         return df[cols].sort_values(['symbol', 'date']).reset_index(drop=True)
 
@@ -226,47 +227,70 @@ class RicequantSource(BaseSource):
         })
         return result.sort_values('symbol').reset_index(drop=True)
 
-    def get_stock_bar(
+    _MINUTE_FREQ_MAP = {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '60m': '60m'}
+
+    def get_stock_minute_bar(
         self,
         symbol: str,
-        frequency: str = "day",
+        frequency: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Get K-line/bar data for stocks.
-
-        Note: 'month' and 'tick' frequencies are not supported by rqdatac.
+        """Get minute bar data for stocks.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
-            frequency: see README (supported: day, week, 1m, 5m, 15m, 30m, 60m)
+            frequency: one of "1m", "5m", "15m", "30m", "60m"
             start_date: see README
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close,
-            change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
         """
-        if frequency not in self._FREQUENCY_MAP:
-            raise NotImplementedError(
-                f"Ricequant does not support '{frequency}' frequency. "
-                f"Supported frequencies: {list(self._FREQUENCY_MAP.keys())}"
-            )
+        if frequency not in self._MINUTE_FREQ_MAP:
+            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
 
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
         if isinstance(rq_symbols, str):
             rq_symbols = [rq_symbols]
-
         df = rq.get_price(
             rq_symbols, start_date=start_date, end_date=end_date,
-            frequency=self._FREQUENCY_MAP[frequency],
+            frequency=self._MINUTE_FREQ_MAP[frequency],
             adjust_type='none', expect_df=True,
         )
-
         if df is None or df.empty:
-            return self._empty_stock_bar()
-        return self._normalize_bar(df, rq)
+            return self._empty_stock_minute_bar()
+        return self._normalize_minute_bar(df, rq)
+
+    def get_stock_daily_bar(
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get daily bar data for stocks.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            start_date: see README
+            end_date: see README
+
+        Returns:
+            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+        """
+        rq = _get_rqdatac()
+        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
+        if isinstance(rq_symbols, str):
+            rq_symbols = [rq_symbols]
+        df = rq.get_price(
+            rq_symbols, start_date=start_date, end_date=end_date,
+            frequency='1d',
+            adjust_type='none', expect_df=True,
+        )
+        if df is None or df.empty:
+            return self._empty_stock_daily_bar()
+        return self._normalize_daily_bar(df, rq)
 
     def get_index_list(
         self,
@@ -326,7 +350,41 @@ class RicequantSource(BaseSource):
         })
         return result.sort_values('symbol').reset_index(drop=True)
 
-    def get_index_bar(
+    def get_index_minute_bar(
+        self,
+        symbol: str,
+        frequency: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get minute bar data for an index.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            frequency: one of "1m", "5m", "15m", "30m", "60m"
+            start_date: see README
+            end_date: see README
+
+        Returns:
+            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+        """
+        if frequency not in self._MINUTE_FREQ_MAP:
+            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
+
+        rq = _get_rqdatac()
+        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
+        if isinstance(rq_symbols, str):
+            rq_symbols = [rq_symbols]
+        df = rq.get_price(
+            rq_symbols, start_date=start_date, end_date=end_date,
+            frequency=self._MINUTE_FREQ_MAP[frequency],
+            adjust_type='none', expect_df=True,
+        )
+        if df is None or df.empty:
+            return self._empty_index_minute_bar()
+        return self._normalize_minute_bar(df, rq)
+
+    def get_index_daily_bar(
         self,
         symbol: str,
         start_date: Optional[str] = None,
@@ -340,8 +398,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, pre_close,
-            change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
         """
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
@@ -349,9 +406,9 @@ class RicequantSource(BaseSource):
             rq_symbols = [rq_symbols]
         df = rq.get_price(
             rq_symbols, start_date=start_date, end_date=end_date,
-            frequency='1d', adjust_type='none', expect_df=True,
+            frequency='1d',
+            adjust_type='none', expect_df=True,
         )
-
         if df is None or df.empty:
-            return self._empty_index_bar()
-        return self._normalize_bar(df, rq)
+            return self._empty_index_daily_bar()
+        return self._normalize_daily_bar(df, rq)

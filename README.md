@@ -17,13 +17,13 @@
 
 ## 支持的数据源
 
-| 数据源      | 状态   | 说明                                                    |
-| ----------- | ------ | ------------------------------------------------------- |
-| **AKShare** | 计划中 | 免费，实时数据                                          |
-| **Tushare** | 已接入 | 需满足账户积分要求，支持股票&指数的历史日线             |
-| **米筐**    | 已接入 | 需license，支持日线/分钟线（不支持月线/暂时不支持tick） |
-| **迅投**    | 计划中 | 需迅投终端                                              |
-| **iTick**   | 计划中 | 需注册                                                  |
+| 数据源      | 状态   | 说明                                           |
+| ----------- | ------ | ---------------------------------------------- |
+| **AKShare** | 计划中 | 免费，实时数据                                 |
+| **Tushare** | 已接入 | 需满足账户积分要求，支持日线；分钟线需独立权限 |
+| **米筐**    | 已接入 | 需license，支持日线/分钟线                     |
+| **迅投**    | 计划中 | 需迅投终端                                     |
+| **iTick**   | 计划中 | 需注册                                         |
 
 ## 安装
 
@@ -61,9 +61,13 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 以 Tushare/米筐为例 为例：
 
 ```python
-from hqdata import init_source, get_calendar, get_stock_list, get_stock_bar, get_index_list, get_index_bar
+from hqdata import (
+    init_source, get_calendar,
+    get_stock_list, get_stock_daily_bar, get_stock_minute_bar,
+    get_index_list, get_index_daily_bar, get_index_minute_bar,
+)
 
-# 初始化 Tushare 
+# 初始化 Tushare
 init_source("tushare") # 如果使用米筐数据源则将"tushare"替换为"ricequant"，其它数据源同理
 
 # 查询交易日历
@@ -73,44 +77,42 @@ get_calendar("20260301", "20260401", is_open=False) # 只返回非交易日
 
 # 查询当日股票列表
 get_stock_list() # 返回所有股票
-get_stock_list(symbol="000001.SZ") # 单只股票
-get_stock_list(symbol="000001.SZ,600000.SH") # 多只股票
-get_stock_list(exchange="SSE") # 单个交易所
-get_stock_list(exchange="SSE,SZSE") # 多个交易所
-get_stock_list(board="MB") # 单个板块
-get_stock_list(board="MB,GEM,STAR") # 多个板块
-get_stock_list(board="MB", exchange="SSE") # 主板 + 上交所
-get_stock_list(symbol="000001.SZ", exchange="SZSE", board="MB") # 三参数取交集
+get_stock_list(symbol="000001.SZ,600000.SH") # 按股票代码筛选
+get_stock_list(exchange="SSE,SZSE") # 按交易所筛选
+get_stock_list(board="MB,GEM,STAR") # 按板块筛选
+get_stock_list(board="MB", exchange="SSE") # 多参数时取交集
+
+# 查询股票分钟线数据
+get_stock_minute_bar("000001.SZ,600000.SH", frequency="1m", start_date="20260401", end_date="20260401")
 
 # 查询股票日线数据
-get_stock_bar("000001.SZ", frequency="day", start_date="20260101", end_date="20260401")
-get_stock_bar("000001.SZ,600000.SH", frequency="day", start_date="20260101", end_date="20260401")
+get_stock_daily_bar("000001.SZ,600000.SH", start_date="20260101", end_date="20260401")
 
 # 查询当日指数列表
 get_index_list() # 返回所有指数
-get_index_list(symbol="000300.SH") # 单个指数
-get_index_list(symbol="000300.SH,000905.SH") # 多个指数
-get_index_list(market="SSE") # 单个市场指数
-get_index_list(market="SSE,SZSE") # 多个市场指数
-get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market, 只有symbol字段会生效
+get_index_list(symbol="000300.SH,000905.SH") # 按指数代码筛选
+get_index_list(market="SSE,SZSE") # 按市场筛选
+get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market时，只有symbol生效
+
+# 查询指数分钟线数据
+get_index_minute_bar("000300.SH,000905.SH", frequency="1m", start_date="20260401", end_date="20260401")
 
 # 查询指数日线数据
-get_index_bar("000300.SH", start_date="20260101", end_date="20260401")
-get_index_bar("000300.SH,000905.SH", start_date="20260330", end_date="20260401")
+get_index_daily_bar("000300.SH,000905.SH", start_date="20260101", end_date="20260401")
 ```
 
 ## 测试
 
 ```bash
 pytest tests/ -v # 运行全部测试
-pytest tests/test_tushare.py::TestTushareIntegration::test_get_stock_bar_single_symbol  # 运行单个测试
+pytest tests/test_tushare.py::TestTushareIntegration::test_get_stock_daily_bar  # 运行单个测试
 ```
 
 ## 输入参数说明
 
 ### symbol（股票代码）
 
-symbol 参数统一使用 `交易所简写代码` 作为后缀：
+symbol 参数统一使用 `交易所简写代码` 作为后缀，支持以 `,` 分隔的多个symbol传入
 
 | 交易所 | 交易所简写代码 | symbol示例  |
 | ------ | -------------- | ----------- |
@@ -126,17 +128,15 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀：
 
 ### frequency（频率）
 
-| 值      | 说明         |
-| ------- | ------------ |
-| "tick"  | 实时         |
-| "1m"    | 1分钟线      |
-| "5m"    | 5分钟线      |
-| "15m"   | 15分钟线     |
-| "30m"   | 30分钟线     |
-| "60m"   | 60分钟线     |
-| "day"   | 日线（默认） |
-| "week"  | 周线         |
-| "month" | 月线         |
+`get_stock_minute_bar` / `get_index_minute_bar` 支持：
+
+| 值    | 说明     | Tushare（需权限） | 米筐 |
+| ----- | -------- | ----------------- | ---- |
+| "1m"  | 1分钟线  | ✓                 | ✓    |
+| "5m"  | 5分钟线  | ✓                 | ✓    |
+| "15m" | 15分钟线 | ✓                 | ✓    |
+| "30m" | 30分钟线 | ✓                 | ✓    |
+| "60m" | 60分钟线 | ✓                 | ✓    |
 
 ### exchange（交易所）
 
