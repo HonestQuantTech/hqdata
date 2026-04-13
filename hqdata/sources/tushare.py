@@ -78,7 +78,7 @@ class TushareSource(BaseSource):
 
     @staticmethod
     def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
-        return df.rename(
+        df = df.rename(
             columns={
                 "ts_code": "symbol",
                 "trade_date": "date",
@@ -87,6 +87,13 @@ class TushareSource(BaseSource):
                 "amount": "turnover",
             }
         )
+        # Tushare daily bar: volume unit is 手(100股), turnover unit is 千元
+        # Normalize to 股 and 元 to match other sources
+        if "volume" in df.columns:
+            df["volume"] = (df["volume"] * 100).astype("int64")
+        if "turnover" in df.columns:
+            df["turnover"] = df["turnover"] * 1000
+        return df
 
     @staticmethod
     def _normalize_minute_bar(
