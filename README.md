@@ -61,51 +61,46 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 以 Tushare/米筐为例 为例：
 
 ```python
-from hqdata import (
-    init_source, get_calendar,
-    is_trading_day, get_current_trading_day, next_trading_day, previous_trading_day,
-    get_stock_list, get_stock_daily_bar, get_stock_minute_bar,
-    get_index_list, get_index_daily_bar, get_index_minute_bar,
-)
+import hqdata
 
 # 初始化 Tushare
-init_source("tushare") # 如果使用米筐数据源则将"tushare"替换为"ricequant"，其它数据源同理
+hqdata.init_source("tushare") # 如果使用米筐数据源则将"tushare"替换为"ricequant"，其它数据源同理
 
 # 查询交易日历
-get_calendar("20260301", "20260401") # 返回[20260301, 20260401]内所有自然日，不筛选
-get_calendar("20260301", "20260401", is_open=True) # 只返回交易日
-get_calendar("20260301", "20260401", is_open=False) # 只返回非交易日
+hqdata.get_calendar("20260301", "20260401") # 返回[20260301, 20260401]内所有自然日，不筛选
+hqdata.get_calendar("20260301", "20260401", is_open=True) # 只返回交易日
+hqdata.get_calendar("20260301", "20260401", is_open=False) # 只返回非交易日
 
 # 交易日判断与导航
-is_trading_day("20260410")          # 判断是否为交易日
-get_current_trading_day()           # 当前交易日（非交易日时返回最近上一个交易日）
-next_trading_day("20260410")        # 下一个交易日
-previous_trading_day("20260413")    # 上一个交易日
+hqdata.is_trading_day("20260410")          # 判断是否为交易日
+hqdata.get_current_trading_day()           # 当前交易日（非交易日时返回最近上一个交易日）
+hqdata.next_trading_day("20260410")        # 下一个交易日
+hqdata.previous_trading_day("20260413")    # 上一个交易日
 
 # 查询当日股票列表(上市状态)
-get_stock_list() # 返回所有股票
-get_stock_list(symbol="000001.SZ,600000.SH") # 按股票代码筛选
-get_stock_list(exchange="SSE,SZSE") # 按交易所筛选
-get_stock_list(board="MB,GEM,STAR") # 按板块筛选
-get_stock_list(board="MB", exchange="SSE") # 多参数时取交集
+hqdata.get_stock_list() # 返回所有股票
+hqdata.get_stock_list(symbol="000001.SZ,600000.SH") # 按股票代码筛选
+hqdata.get_stock_list(exchange="SSE,SZSE") # 按交易所筛选
+hqdata.get_stock_list(board="MB,GEM,STAR") # 按板块筛选
+hqdata.get_stock_list(board="MB", exchange="SSE") # 多参数时取交集
 
 # 查询股票分钟线数据
-get_stock_minute_bar("000001.SZ,600000.SH", frequency="1m", start_date="20260401", end_date="20260401")
+hqdata.get_stock_minute_bar("000001.SZ,600000.SH", frequency="1m", start_date="20260401", end_date="20260401")
 
 # 查询股票日线数据
-get_stock_daily_bar("000001.SZ,600000.SH", start_date="20260101", end_date="20260401")
+hqdata.get_stock_daily_bar("000001.SZ,600000.SH", start_date="20260101", end_date="20260401")
 
 # 查询当日指数列表
-get_index_list() # 返回所有指数
-get_index_list(symbol="000300.SH,000905.SH") # 按指数代码筛选
-get_index_list(market="SSE,SZSE") # 按市场筛选
-get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market时，只有symbol生效
+hqdata.get_index_list() # 返回所有指数
+hqdata.get_index_list(symbol="000300.SH,000905.SH") # 按指数代码筛选
+hqdata.get_index_list(market="SSE,SZSE") # 按市场筛选
+hqdata.get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market时，只有symbol生效
 
 # 查询指数分钟线数据
-get_index_minute_bar("000300.SH,000905.SH", frequency="1m", start_date="20260401", end_date="20260401")
+hqdata.get_index_minute_bar("000300.SH,000905.SH", frequency="1m", start_date="20260401", end_date="20260401")
 
 # 查询指数日线数据
-get_index_daily_bar("000300.SH,000905.SH", start_date="20260101", end_date="20260401")
+hqdata.get_index_daily_bar("000300.SH,000905.SH", start_date="20260101", end_date="20260401")
 ```
 
 ## 测试
