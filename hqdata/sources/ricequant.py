@@ -11,6 +11,7 @@ from hqdata.sources.base import BaseSource
 def _get_rqdatac():
     """Lazy import rqdatac to support optional installation."""
     import rqdatac as rq
+
     return rq
 
 
@@ -23,42 +24,71 @@ class RicequantSource(BaseSource):
     - Username/password: Set username/password parameters or RQDATA_USERNAME/RQDATA_PASSWORD env vars
     """
 
-    _EXCHANGE_MAP = {'SSE': 'XSHG', 'SZSE': 'XSHE', 'BJSE': 'BJSE'}
+    _EXCHANGE_MAP = {"SSE": "XSHG", "SZSE": "XSHE", "BJSE": "BJSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
     _BOARD_MAP = {
-        'MB': 'MainBoard',
-        'GEM': 'GEM',
-        'STAR': 'KSH',
-        'BJSE': 'BJS',
+        "MB": "MainBoard",
+        "GEM": "GEM",
+        "STAR": "KSH",
+        "BJSE": "BJS",
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
-    _MINUTE_FREQ_MAP = {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '60m': '60m'}
+    _MINUTE_FREQ_MAP = {
+        "1m": "1m",
+        "5m": "5m",
+        "15m": "15m",
+        "30m": "30m",
+        "60m": "60m",
+    }
 
     @staticmethod
     def _normalize_minute_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
         """Convert get_price() minute output to hqdata standard minute bar format."""
         df = df.reset_index()
-        df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
-        df['date'] = df['datetime'].dt.strftime('%Y%m%d')
-        df['datetime'] = df['datetime'].dt.strftime('%Y%m%dT%H%M%S') + '000'
-        df = df.rename(columns={'total_turnover': 'turnover'})
-        cols = ['symbol', 'date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'datetime']
-        return df[cols].sort_values(['symbol', 'datetime']).reset_index(drop=True)
+        df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
+        df["date"] = df["datetime"].dt.strftime("%Y%m%d")
+        df["datetime"] = df["datetime"].dt.strftime("%Y%m%dT%H%M%S") + "000"
+        df = df.rename(columns={"total_turnover": "turnover"})
+        cols = [
+            "symbol",
+            "date",
+            "open",
+            "close",
+            "high",
+            "low",
+            "volume",
+            "turnover",
+            "datetime",
+        ]
+        return df[cols].sort_values(["symbol", "datetime"]).reset_index(drop=True)
 
     @staticmethod
     def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
         """Convert get_price() daily output to hqdata standard daily bar format."""
         df = df.reset_index()
-        df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
-        df['date'] = df['date'].dt.strftime('%Y%m%d')
-        df = df.rename(columns={'total_turnover': 'turnover', 'prev_close': 'pre_close'})
-        df['change'] = (df['close'] - df['pre_close']).round(4)
-        df['pct_change'] = ((df['change'] / df['pre_close']) * 100).round(4)
-        cols = ['symbol', 'date', 'open', 'close', 'high', 'low',
-                'volume', 'turnover', 'pre_close', 'change', 'pct_change']
-        return df[cols].sort_values(['symbol', 'date']).reset_index(drop=True)
+        df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
+        df["date"] = df["date"].dt.strftime("%Y%m%d")
+        df = df.rename(
+            columns={"total_turnover": "turnover", "prev_close": "pre_close"}
+        )
+        df["change"] = (df["close"] - df["pre_close"]).round(4)
+        df["pct_change"] = ((df["change"] / df["pre_close"]) * 100).round(4)
+        cols = [
+            "symbol",
+            "date",
+            "open",
+            "close",
+            "high",
+            "low",
+            "volume",
+            "turnover",
+            "pre_close",
+            "change",
+            "pct_change",
+        ]
+        return df[cols].sort_values(["symbol", "date"]).reset_index(drop=True)
 
     @staticmethod
     def _get_hs_connect_stocks(rq) -> set:
@@ -72,12 +102,12 @@ class RicequantSource(BaseSource):
         trading_dates = rq.get_trading_dates(
             start_date=today.replace(year=today.year - 1),
             end_date=today,
-            market='cn',
+            market="cn",
         )
         for d in reversed(trading_dates):
-            df = rq.get_stock_connect('all_connect', start_date=d, end_date=d)
+            df = rq.get_stock_connect("all_connect", start_date=d, end_date=d)
             if df is not None:
-                return set(df.index.get_level_values('order_book_id').unique())
+                return set(df.index.get_level_values("order_book_id").unique())
         return set()
 
     def __init__(
@@ -102,21 +132,28 @@ class RicequantSource(BaseSource):
         # Try license key first
         resolved_key = license_key or os.environ.get("RQDATA_LICENSE_KEY")
         if resolved_key:
-            rq.init(username="license", password=resolved_key, use_zstd=True, enable_bjse=True)
+            rq.init(
+                username="license",
+                password=resolved_key,
+                use_zstd=True,
+                enable_bjse=True,
+            )
             return
 
         # Fall back to username/password
         username = BaseSource._get_env(
-            username, "RQDATA_USERNAME",
+            username,
+            "RQDATA_USERNAME",
             "RQData credentials not provided. Set license_key in init_source() "
             "or set RQDATA_LICENSE_KEY environment variable. "
-            "Alternatively, set RQDATA_USERNAME and RQDATA_PASSWORD environment variables."
+            "Alternatively, set RQDATA_USERNAME and RQDATA_PASSWORD environment variables.",
         )
         password = BaseSource._get_env(
-            password, "RQDATA_PASSWORD",
+            password,
+            "RQDATA_PASSWORD",
             "RQData credentials not provided. Set license_key in init_source() "
             "or set RQDATA_LICENSE_KEY environment variable. "
-            "Alternatively, set RQDATA_USERNAME and RQDATA_PASSWORD environment variables."
+            "Alternatively, set RQDATA_USERNAME and RQDATA_PASSWORD environment variables.",
         )
         rq.init(
             username,
@@ -126,7 +163,7 @@ class RicequantSource(BaseSource):
             max_pool_size=1,
             auto_load_plugins=False,
             use_zstd=True,
-            enable_bjse=True
+            enable_bjse=True,
         )
 
     def get_calendar(
@@ -146,18 +183,18 @@ class RicequantSource(BaseSource):
             DataFrame with columns: date, is_open
         """
         rq = _get_rqdatac()
-        start = datetime.strptime(start_date, '%Y%m%d').date()
-        end = datetime.strptime(end_date, '%Y%m%d').date()
-        trading_dates = set(rq.get_trading_dates(start_date, end_date, market='cn'))
+        start = datetime.strptime(start_date, "%Y%m%d").date()
+        end = datetime.strptime(end_date, "%Y%m%d").date()
+        trading_dates = set(rq.get_trading_dates(start_date, end_date, market="cn"))
         all_dates, is_open_list = [], []
         cur = start
         while cur <= end:
-            all_dates.append(cur.strftime('%Y%m%d'))
-            is_open_list.append('Y' if cur in trading_dates else 'N')
+            all_dates.append(cur.strftime("%Y%m%d"))
+            is_open_list.append("Y" if cur in trading_dates else "N")
             cur += timedelta(days=1)
-        df = pd.DataFrame({'date': all_dates, 'is_open': is_open_list})
+        df = pd.DataFrame({"date": all_dates, "is_open": is_open_list})
         if is_open is not None:
-            df = df[df['is_open'] == ('Y' if is_open else 'N')].reset_index(drop=True)
+            df = df[df["is_open"] == ("Y" if is_open else "N")].reset_index(drop=True)
         return df
 
     def get_stock_list(
@@ -181,19 +218,19 @@ class RicequantSource(BaseSource):
             curr_type, list_date, delist_date, is_hs
         """
         rq = _get_rqdatac()
-        df = rq.all_instruments(type='CS', date=date.today())
+        df = rq.all_instruments(type="CS", date=date.today())
 
         if df is None or df.empty:
             return self._empty_stock_list()
 
-        df = df[df['status'] == 'Active'].reset_index(drop=True)
+        df = df[df["status"] == "Active"].reset_index(drop=True)
 
         # Apply filters on raw rqdatac values (before mapping to hqdata conventions)
         if symbol:
             rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
             if isinstance(rq_symbols, str):
                 rq_symbols = [rq_symbols]
-            df = df[df['order_book_id'].isin(rq_symbols)].reset_index(drop=True)
+            df = df[df["order_book_id"].isin(rq_symbols)].reset_index(drop=True)
 
         if exchange:
             rq_exchanges = [
@@ -201,7 +238,7 @@ class RicequantSource(BaseSource):
                 for e in exchange.split(",")
                 if e.strip() in self._EXCHANGE_MAP
             ]
-            df = df[df['exchange'].isin(rq_exchanges)].reset_index(drop=True)
+            df = df[df["exchange"].isin(rq_exchanges)].reset_index(drop=True)
 
         if board:
             rq_board_types = [
@@ -209,25 +246,30 @@ class RicequantSource(BaseSource):
                 for m in board.split(",")
                 if m.strip() in self._BOARD_MAP
             ]
-            df = df[df['board_type'].isin(rq_board_types)].reset_index(drop=True)
+            df = df[df["board_type"].isin(rq_board_types)].reset_index(drop=True)
 
         if df.empty:
             return self._empty_stock_list()
 
         hs_stocks = self._get_hs_connect_stocks(rq)
-        result = pd.DataFrame({
-            'symbol': rq.id_convert(df['order_book_id'].tolist(), to='normal'),
-            'date': date.today().strftime('%Y%m%d'),
-            'name': df['symbol'].tolist(),
-            'exchange': df['exchange'].map(self._REVERSE_EXCHANGE_MAP).tolist(),
-            'board': df['board_type'].map(self._REVERSE_BOARD_MAP).tolist(),
-            'industry': df['industry_name'].tolist(),
-            'curr_type': 'CNY',
-            'list_date': df['listed_date'].tolist(),
-            'delist_date': df['de_listed_date'].tolist(),
-            'is_hs': df['order_book_id'].isin(hs_stocks).map({True: 'Y', False: 'N'}).tolist(),
-        })
-        return result.sort_values('symbol').reset_index(drop=True)
+        result = pd.DataFrame(
+            {
+                "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
+                "date": date.today().strftime("%Y%m%d"),
+                "name": df["symbol"].tolist(),
+                "exchange": df["exchange"].map(self._REVERSE_EXCHANGE_MAP).tolist(),
+                "board": df["board_type"].map(self._REVERSE_BOARD_MAP).tolist(),
+                "industry": df["industry_name"].tolist(),
+                "curr_type": "CNY",
+                "list_date": df["listed_date"].tolist(),
+                "delist_date": df["de_listed_date"].tolist(),
+                "is_hs": df["order_book_id"]
+                .isin(hs_stocks)
+                .map({True: "Y", False: "N"})
+                .tolist(),
+            }
+        )
+        return result.sort_values("symbol").reset_index(drop=True)
 
     def get_stock_minute_bar(
         self,
@@ -248,16 +290,21 @@ class RicequantSource(BaseSource):
             DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
-            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
+            raise ValueError(
+                f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'"
+            )
 
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
         if isinstance(rq_symbols, str):
             rq_symbols = [rq_symbols]
         df = rq.get_price(
-            rq_symbols, start_date=start_date, end_date=end_date,
+            rq_symbols,
+            start_date=start_date,
+            end_date=end_date,
             frequency=self._MINUTE_FREQ_MAP[frequency],
-            adjust_type='none', expect_df=True,
+            adjust_type="none",
+            expect_df=True,
         )
         if df is None or df.empty:
             return self._empty_stock_minute_bar()
@@ -284,9 +331,12 @@ class RicequantSource(BaseSource):
         if isinstance(rq_symbols, str):
             rq_symbols = [rq_symbols]
         df = rq.get_price(
-            rq_symbols, start_date=start_date, end_date=end_date,
-            frequency='1d',
-            adjust_type='none', expect_df=True,
+            rq_symbols,
+            start_date=start_date,
+            end_date=end_date,
+            frequency="1d",
+            adjust_type="none",
+            expect_df=True,
         )
         if df is None or df.empty:
             return self._empty_stock_daily_bar()
@@ -314,7 +364,7 @@ class RicequantSource(BaseSource):
         use_market = market and market.strip() if not use_symbol else None
 
         rq = _get_rqdatac()
-        df = rq.all_instruments(type='INDX', date=date.today())
+        df = rq.all_instruments(type="INDX", date=date.today())
 
         if df is None or df.empty:
             return self._empty_index_list()
@@ -325,7 +375,7 @@ class RicequantSource(BaseSource):
             rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
             if isinstance(rq_symbols, str):
                 rq_symbols = [rq_symbols]
-            df = df[df['order_book_id'].isin(rq_symbols)].reset_index(drop=True)
+            df = df[df["order_book_id"].isin(rq_symbols)].reset_index(drop=True)
         elif use_market:
             rq_exchanges = [
                 self._EXCHANGE_MAP[m.strip()]
@@ -334,21 +384,25 @@ class RicequantSource(BaseSource):
             ]
             if not rq_exchanges:
                 return self._empty_index_list()
-            df = df[df['exchange'].isin(rq_exchanges)].reset_index(drop=True)
+            df = df[df["exchange"].isin(rq_exchanges)].reset_index(drop=True)
 
         if df.empty:
             return self._empty_index_list()
-        result = pd.DataFrame({
-            'symbol': rq.id_convert(df['order_book_id'].tolist(), to='normal'),
-            'date': date.today().strftime('%Y%m%d'),
-            'name': df['symbol'].tolist(),
-            'fullname': df['symbol'].tolist(),  # rqdatac does not provide a separate full name
-            'market': df['exchange'].map(self._REVERSE_EXCHANGE_MAP).tolist(),
-            'base_date': df['base_date'].tolist(),
-            'base_point': df['base_point'].tolist(),
-            'list_date': df['listed_date'].tolist(),
-        })
-        return result.sort_values('symbol').reset_index(drop=True)
+        result = pd.DataFrame(
+            {
+                "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
+                "date": date.today().strftime("%Y%m%d"),
+                "name": df["symbol"].tolist(),
+                "fullname": df[
+                    "symbol"
+                ].tolist(),  # rqdatac does not provide a separate full name
+                "market": df["exchange"].map(self._REVERSE_EXCHANGE_MAP).tolist(),
+                "base_date": df["base_date"].tolist(),
+                "base_point": df["base_point"].tolist(),
+                "list_date": df["listed_date"].tolist(),
+            }
+        )
+        return result.sort_values("symbol").reset_index(drop=True)
 
     def get_index_minute_bar(
         self,
@@ -369,16 +423,21 @@ class RicequantSource(BaseSource):
             DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
-            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
+            raise ValueError(
+                f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'"
+            )
 
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
         if isinstance(rq_symbols, str):
             rq_symbols = [rq_symbols]
         df = rq.get_price(
-            rq_symbols, start_date=start_date, end_date=end_date,
+            rq_symbols,
+            start_date=start_date,
+            end_date=end_date,
             frequency=self._MINUTE_FREQ_MAP[frequency],
-            adjust_type='none', expect_df=True,
+            adjust_type="none",
+            expect_df=True,
         )
         if df is None or df.empty:
             return self._empty_index_minute_bar()
@@ -405,9 +464,12 @@ class RicequantSource(BaseSource):
         if isinstance(rq_symbols, str):
             rq_symbols = [rq_symbols]
         df = rq.get_price(
-            rq_symbols, start_date=start_date, end_date=end_date,
-            frequency='1d',
-            adjust_type='none', expect_df=True,
+            rq_symbols,
+            start_date=start_date,
+            end_date=end_date,
+            frequency="1d",
+            adjust_type="none",
+            expect_df=True,
         )
         if df is None or df.empty:
             return self._empty_index_daily_bar()

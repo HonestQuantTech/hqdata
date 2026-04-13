@@ -18,46 +18,107 @@ class BaseSource(ABC):
 
     @staticmethod
     def _empty_calendar() -> pd.DataFrame:
-        return pd.DataFrame(columns=['date', 'is_open'])
+        return pd.DataFrame(columns=["date", "is_open"])
 
     @staticmethod
     def _empty_stock_list() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'name', 'exchange', 'board', 'industry',
-            'curr_type', 'list_date', 'delist_date', 'is_hs',
-        ])
+        return pd.DataFrame(
+            columns=[
+                "symbol",
+                "date",
+                "name",
+                "exchange",
+                "board",
+                "industry",
+                "curr_type",
+                "list_date",
+                "delist_date",
+                "is_hs",
+            ]
+        )
 
     @staticmethod
     def _empty_stock_minute_bar() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'datetime',
-        ])
+        return pd.DataFrame(
+            columns=[
+                "symbol",
+                "date",
+                "open",
+                "close",
+                "high",
+                "low",
+                "volume",
+                "turnover",
+                "datetime",
+            ]
+        )
 
     @staticmethod
     def _empty_stock_daily_bar() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'close', 'high', 'low',
-            'volume', 'turnover', 'pre_close', 'change', 'pct_change',
-        ])
+        return pd.DataFrame(
+            columns=[
+                "symbol",
+                "date",
+                "open",
+                "close",
+                "high",
+                "low",
+                "volume",
+                "turnover",
+                "pre_close",
+                "change",
+                "pct_change",
+            ]
+        )
 
     @staticmethod
     def _empty_index_list() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date',
-        ])
+        return pd.DataFrame(
+            columns=[
+                "symbol",
+                "date",
+                "name",
+                "fullname",
+                "market",
+                "base_date",
+                "base_point",
+                "list_date",
+            ]
+        )
 
     @staticmethod
     def _empty_index_minute_bar() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'datetime',
-        ])
+        return pd.DataFrame(
+            columns=[
+                "symbol",
+                "date",
+                "open",
+                "close",
+                "high",
+                "low",
+                "volume",
+                "turnover",
+                "datetime",
+            ]
+        )
 
     @staticmethod
     def _empty_index_daily_bar() -> pd.DataFrame:
-        return pd.DataFrame(columns=[
-            'symbol', 'date', 'open', 'close', 'high', 'low',
-            'volume', 'turnover', 'pre_close', 'change', 'pct_change',
-        ])
+        return pd.DataFrame(
+            columns=[
+                "symbol",
+                "date",
+                "open",
+                "close",
+                "high",
+                "low",
+                "volume",
+                "turnover",
+                "pre_close",
+                "change",
+                "pct_change",
+            ]
+        )
 
     @abstractmethod
     def get_calendar(

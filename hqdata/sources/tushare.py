@@ -12,7 +12,9 @@ from hqdata.sources.base import BaseSource
 def _get_tushare():
     """Lazy import tushare to support optional installation."""
     import tushare as ts
+
     return ts
+
 
 class _RateLimiter:
     """Sliding window rate limiter for API calls."""
@@ -37,6 +39,7 @@ class _RateLimiter:
             sleep_time = self._timestamps[0] + self.window_seconds - now + 0.01
             if sleep_time > 0:
                 time.sleep(sleep_time)
+
 
 class TushareSource(BaseSource):
     """Tushare data source adapter.
@@ -63,37 +66,61 @@ class TushareSource(BaseSource):
         "ts_code,name,industry,market,exchange,curr_type,list_date,delist_date,is_hs"
     )
 
-    _INDEX_LIST_FIELDS = (
-        "ts_code,name,fullname,market,base_date,base_point,list_date"
-    )
+    _INDEX_LIST_FIELDS = "ts_code,name,fullname,market,base_date,base_point,list_date"
 
     _MINUTE_FREQ_MAP = {
-        "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "60min",
+        "1m": "1min",
+        "5m": "5min",
+        "15m": "15min",
+        "30m": "30min",
+        "60m": "60min",
     }
 
     @staticmethod
     def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
-        return df.rename(columns={
-            "ts_code": "symbol",
-            "trade_date": "date",
-            "pct_chg": "pct_change",
-            "vol": "volume",
-            "amount": "turnover",
-        })
+        return df.rename(
+            columns={
+                "ts_code": "symbol",
+                "trade_date": "date",
+                "pct_chg": "pct_change",
+                "vol": "volume",
+                "amount": "turnover",
+            }
+        )
 
     @staticmethod
-    def _normalize_minute_bar(df: pd.DataFrame, symbol_col: str = "ts_code") -> pd.DataFrame:
+    def _normalize_minute_bar(
+        df: pd.DataFrame, symbol_col: str = "ts_code"
+    ) -> pd.DataFrame:
         """Convert Tushare minute bar to standard format."""
-        df = df.rename(columns={
-            symbol_col: "symbol",
-            "trade_time": "datetime_raw",
-            "vol": "volume",
-            "amount": "turnover",
-        })
+        df = df.rename(
+            columns={
+                symbol_col: "symbol",
+                "trade_time": "datetime_raw",
+                "vol": "volume",
+                "amount": "turnover",
+            }
+        )
         # trade_time format: "2024-01-02 09:31:00"
         df["date"] = df["datetime_raw"].str.replace("-", "").str[:8]
-        df["datetime"] = df["datetime_raw"].str.replace("-", "").str.replace(" ", "T").str.replace(":", "") + "000"
-        cols = ["symbol", "date", "open", "close", "high", "low", "volume", "turnover", "datetime"]
+        df["datetime"] = (
+            df["datetime_raw"]
+            .str.replace("-", "")
+            .str.replace(" ", "T")
+            .str.replace(":", "")
+            + "000"
+        )
+        cols = [
+            "symbol",
+            "date",
+            "open",
+            "close",
+            "high",
+            "low",
+            "volume",
+            "turnover",
+            "datetime",
+        ]
         return df[cols].sort_values(["symbol", "datetime"]).reset_index(drop=True)
 
     def __init__(self, token: Optional[str] = None):
@@ -103,9 +130,10 @@ class TushareSource(BaseSource):
             token: Tushare token, defaults to TUSHARE_TOKEN env var
         """
         token = BaseSource._get_env(
-            token, "TUSHARE_TOKEN",
+            token,
+            "TUSHARE_TOKEN",
             "Tushare token not provided. Set token in init_source() "
-            "or set TUSHARE_TOKEN environment variable."
+            "or set TUSHARE_TOKEN environment variable.",
         )
         ts = _get_tushare()
         ts.set_token(token)
@@ -131,12 +159,12 @@ class TushareSource(BaseSource):
         df = self.pro.trade_cal(start_date=start_date, end_date=end_date)
         if df is None or df.empty:
             return self._empty_calendar()
-        df = df.rename(columns={'cal_date': 'date'})
-        df['is_open'] = df['is_open'].map({1: 'Y', 0: 'N'})
+        df = df.rename(columns={"cal_date": "date"})
+        df["is_open"] = df["is_open"].map({1: "Y", 0: "N"})
         if is_open is not None:
-            filter_val = 'Y' if is_open else 'N'
-            df = df[df['is_open'] == filter_val]
-        return df[['date', 'is_open']].sort_values('date').reset_index(drop=True)
+            filter_val = "Y" if is_open else "N"
+            df = df[df["is_open"] == filter_val]
+        return df[["date", "is_open"]].sort_values("date").reset_index(drop=True)
 
     def get_stock_list(
         self,
@@ -182,8 +210,18 @@ class TushareSource(BaseSource):
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
         df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
-        cols = ['symbol', 'date', 'name', 'exchange', 'board', 'industry',
-                   'curr_type', 'list_date', 'delist_date', 'is_hs']
+        cols = [
+            "symbol",
+            "date",
+            "name",
+            "exchange",
+            "board",
+            "industry",
+            "curr_type",
+            "list_date",
+            "delist_date",
+            "is_hs",
+        ]
         return df[cols]
 
     def get_stock_minute_bar(
@@ -205,16 +243,28 @@ class TushareSource(BaseSource):
             DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
-            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
+            raise ValueError(
+                f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'"
+            )
         freq = self._MINUTE_FREQ_MAP[frequency]
-        start_dt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]} 00:00:00" if start_date else None
-        end_dt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]} 23:59:59" if end_date else None
+        start_dt = (
+            f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]} 00:00:00"
+            if start_date
+            else None
+        )
+        end_dt = (
+            f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]} 23:59:59"
+            if end_date
+            else None
+        )
 
         symbols = [s.strip() for s in symbol.split(",")]
         dfs = []
         for s in symbols:
             self._rate_limiter.acquire()
-            d = self.pro.stk_mins(ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt)
+            d = self.pro.stk_mins(
+                ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt
+            )
             if d is not None and not d.empty:
                 dfs.append(d)
         df = pd.concat(dfs, ignore_index=True) if dfs else None
@@ -245,7 +295,19 @@ class TushareSource(BaseSource):
         if df is None or df.empty:
             return self._empty_stock_daily_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
-        cols = ["symbol", "date", "open", "close", "high", "low", "volume", "turnover", "pre_close", "change", "pct_change"]
+        cols = [
+            "symbol",
+            "date",
+            "open",
+            "close",
+            "high",
+            "low",
+            "volume",
+            "turnover",
+            "pre_close",
+            "change",
+            "pct_change",
+        ]
         return df[cols].reset_index(drop=True)
 
     def get_index_list(
@@ -291,7 +353,16 @@ class TushareSource(BaseSource):
             return self._empty_index_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = date.today().strftime("%Y%m%d")
-        cols = ['symbol', 'date', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date']
+        cols = [
+            "symbol",
+            "date",
+            "name",
+            "fullname",
+            "market",
+            "base_date",
+            "base_point",
+            "list_date",
+        ]
         return df[cols]
 
     def get_index_minute_bar(
@@ -313,16 +384,28 @@ class TushareSource(BaseSource):
             DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
-            raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
+            raise ValueError(
+                f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'"
+            )
         freq = self._MINUTE_FREQ_MAP[frequency]
-        start_dt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]} 00:00:00" if start_date else None
-        end_dt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]} 23:59:59" if end_date else None
+        start_dt = (
+            f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]} 00:00:00"
+            if start_date
+            else None
+        )
+        end_dt = (
+            f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]} 23:59:59"
+            if end_date
+            else None
+        )
 
         symbols = [s.strip() for s in symbol.split(",")]
         dfs = []
         for s in symbols:
             self._rate_limiter.acquire()
-            d = self.pro.idx_mins(ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt)
+            d = self.pro.idx_mins(
+                ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt
+            )
             if d is not None and not d.empty:
                 dfs.append(d)
         df = pd.concat(dfs, ignore_index=True) if dfs else None
@@ -351,7 +434,9 @@ class TushareSource(BaseSource):
         dfs = []
         for s in symbols:
             self._rate_limiter.acquire()
-            d = self.pro.index_daily(ts_code=s, start_date=start_date, end_date=end_date)
+            d = self.pro.index_daily(
+                ts_code=s, start_date=start_date, end_date=end_date
+            )
             if d is not None and not d.empty:
                 dfs.append(d)
         df = pd.concat(dfs, ignore_index=True) if dfs else None
@@ -359,5 +444,17 @@ class TushareSource(BaseSource):
         if df is None or df.empty:
             return self._empty_index_daily_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
-        cols = ["symbol", "date", "open", "close", "high", "low", "volume", "turnover", "pre_close", "change", "pct_change"]
+        cols = [
+            "symbol",
+            "date",
+            "open",
+            "close",
+            "high",
+            "low",
+            "volume",
+            "turnover",
+            "pre_close",
+            "change",
+            "pct_change",
+        ]
         return df[cols].reset_index(drop=True)
