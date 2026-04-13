@@ -63,6 +63,7 @@ cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/
 ```python
 from hqdata import (
     init_source, get_calendar,
+    is_trading_day, get_current_trading_day, next_trading_day, previous_trading_day,
     get_stock_list, get_stock_daily_bar, get_stock_minute_bar,
     get_index_list, get_index_daily_bar, get_index_minute_bar,
 )
@@ -74,6 +75,12 @@ init_source("tushare") # 如果使用米筐数据源则将"tushare"替换为"ric
 get_calendar("20260301", "20260401") # 返回[20260301, 20260401]内所有自然日，不筛选
 get_calendar("20260301", "20260401", is_open=True) # 只返回交易日
 get_calendar("20260301", "20260401", is_open=False) # 只返回非交易日
+
+# 交易日判断与导航
+is_trading_day("20260410")          # 判断是否为交易日
+get_current_trading_day()           # 当前交易日（非交易日时返回最近上一个交易日）
+next_trading_day("20260410")        # 下一个交易日
+previous_trading_day("20260413")    # 上一个交易日
 
 # 查询当日股票列表(上市状态)
 get_stock_list() # 返回所有股票

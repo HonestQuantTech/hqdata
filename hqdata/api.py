@@ -6,6 +6,7 @@ import pandas as pd
 
 # Singleton source instance
 _source: Optional["BaseSource"] = None
+_calendar: Optional["TradingCalendar"] = None
 
 
 def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
@@ -15,7 +16,7 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
         source_type: "ricequant" or "tushare"
         **kwargs: Source-specific credentials
     """
-    global _source
+    global _source, _calendar
     if source_type == "ricequant":
         from hqdata.sources.ricequant import RicequantSource
 
@@ -26,6 +27,10 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
         _source = TushareSource(**kwargs)
     else:
         raise ValueError(f"Unknown source type: {source_type}")
+
+    from hqdata.calendar import TradingCalendar
+
+    _calendar = TradingCalendar(_source.get_calendar)
 
 
 def get_calendar(
@@ -46,6 +51,59 @@ def get_calendar(
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     return _source.get_calendar(start_date, end_date, is_open)
+
+
+def is_trading_day(d: str) -> bool:
+    """Return True if d (YYYYMMDD) is a trading day.
+
+    Args:
+        d: date string in YYYYMMDD format
+
+    Returns:
+        True if trading day, False otherwise
+    """
+    if _calendar is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _calendar.is_trading_day(d)
+
+
+def get_current_trading_day() -> str:
+    """Return today if it's a trading day, else the most recent trading day.
+
+    Returns:
+        Trading day string in YYYYMMDD format
+    """
+    if _calendar is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _calendar.get_current_trading_day()
+
+
+def next_trading_day(d: str) -> str:
+    """Return the first trading day after d (exclusive).
+
+    Args:
+        d: date string in YYYYMMDD format
+
+    Returns:
+        Next trading day string in YYYYMMDD format
+    """
+    if _calendar is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _calendar.next_trading_day(d)
+
+
+def previous_trading_day(d: str) -> str:
+    """Return the last trading day before d (exclusive).
+
+    Args:
+        d: date string in YYYYMMDD format
+
+    Returns:
+        Previous trading day string in YYYYMMDD format
+    """
+    if _calendar is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _calendar.previous_trading_day(d)
 
 
 def get_stock_list(
@@ -88,7 +146,7 @@ def get_stock_minute_bar(
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = date.today().strftime("%Y%m%d")
+    today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
     return _source.get_stock_minute_bar(symbol, frequency, start_date, end_date)
@@ -111,7 +169,7 @@ def get_stock_daily_bar(
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = date.today().strftime("%Y%m%d")
+    today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
     return _source.get_stock_daily_bar(symbol, start_date, end_date)
@@ -154,7 +212,7 @@ def get_index_minute_bar(
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = date.today().strftime("%Y%m%d")
+    today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
     return _source.get_index_minute_bar(symbol, frequency, start_date, end_date)
@@ -177,7 +235,7 @@ def get_index_daily_bar(
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = date.today().strftime("%Y%m%d")
+    today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
     return _source.get_index_daily_bar(symbol, start_date, end_date)
