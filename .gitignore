@@ -60,7 +60,6 @@ htmlcov/
 Thumbs.db
 
 # Claude Code
-CLAUDE.md
 CLAUDE.local.md
 .claude/settings.local.json
 .claude/docs/
