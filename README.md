@@ -75,7 +75,7 @@ get_calendar("20260301", "20260401") # 返回[20260301, 20260401]内所有自然
 get_calendar("20260301", "20260401", is_open=True) # 只返回交易日
 get_calendar("20260301", "20260401", is_open=False) # 只返回非交易日
 
-# 查询当日股票列表
+# 查询当日股票列表(上市状态)
 get_stock_list() # 返回所有股票
 get_stock_list(symbol="000001.SZ,600000.SH") # 按股票代码筛选
 get_stock_list(exchange="SSE,SZSE") # 按交易所筛选

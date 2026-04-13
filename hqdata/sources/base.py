@@ -17,6 +17,10 @@ class BaseSource(ABC):
         return value
 
     @staticmethod
+    def _empty_calendar() -> pd.DataFrame:
+        return pd.DataFrame(columns=['date', 'is_open'])
+
+    @staticmethod
     def _empty_stock_list() -> pd.DataFrame:
         return pd.DataFrame(columns=[
             'symbol', 'name', 'exchange', 'board', 'industry',
@@ -54,10 +58,6 @@ class BaseSource(ABC):
             'symbol', 'date', 'open', 'close', 'high', 'low',
             'pre_close', 'change', 'pct_change', 'volume', 'turnover',
         ])
-
-    @staticmethod
-    def _empty_calendar() -> pd.DataFrame:
-        return pd.DataFrame(columns=['date', 'is_open'])
 
     @abstractmethod
     def get_calendar(

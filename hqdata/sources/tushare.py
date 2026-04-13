@@ -45,7 +45,6 @@ class TushareSource(BaseSource):
     Token can be set via environment variable TUSHARE_TOKEN.
     """
 
-
     # Tushare API allows 200 calls per minute(2000积分以上)
     # Tushare API allows 500 calls per minute(5000积分以上)
     # Shared across all instances (class-level) so multiple TushareSource objects
@@ -64,6 +63,39 @@ class TushareSource(BaseSource):
         "ts_code,name,industry,market,exchange,curr_type,list_date,delist_date,is_hs"
     )
 
+    _INDEX_LIST_FIELDS = (
+        "ts_code,name,fullname,market,base_date,base_point,list_date"
+    )
+
+    _MINUTE_FREQ_MAP = {
+        "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "60min",
+    }
+
+    @staticmethod
+    def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
+        return df.rename(columns={
+            "ts_code": "symbol",
+            "trade_date": "date",
+            "pct_chg": "pct_change",
+            "vol": "volume",
+            "amount": "turnover",
+        })
+
+    @staticmethod
+    def _normalize_minute_bar(df: pd.DataFrame, symbol_col: str = "ts_code") -> pd.DataFrame:
+        """Convert Tushare minute bar to standard format."""
+        df = df.rename(columns={
+            symbol_col: "symbol",
+            "trade_time": "datetime_raw",
+            "vol": "volume",
+            "amount": "turnover",
+        })
+        # trade_time format: "2024-01-02 09:31:00"
+        df["date"] = df["datetime_raw"].str.replace("-", "").str[:8]
+        df["datetime"] = df["datetime_raw"].str.replace("-", "").str.replace(" ", "T").str.replace(":", "") + "000"
+        cols = ["symbol", "date", "datetime", "open", "close", "high", "low", "volume", "turnover"]
+        return df[cols].sort_values(["symbol", "datetime"]).reset_index(drop=True)
+
     def __init__(self, token: Optional[str] = None):
         """Initialize tushare connection.
 
@@ -78,16 +110,6 @@ class TushareSource(BaseSource):
         ts = _get_tushare()
         ts.set_token(token)
         self.pro = ts.pro_api()
-
-    @staticmethod
-    def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
-        return df.rename(columns={
-            "ts_code": "symbol",
-            "trade_date": "date",
-            "pct_chg": "pct_change",
-            "vol": "volume",
-            "amount": "turnover",
-        })
 
     def get_calendar(
         self,
@@ -164,25 +186,6 @@ class TushareSource(BaseSource):
                    'curr_type', 'list_date', 'delist_date', 'is_hs', 'date']
         return df[cols]
 
-    _MINUTE_FREQ_MAP = {
-        "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "60min",
-    }
-
-    @staticmethod
-    def _normalize_minute_bar(df: pd.DataFrame, symbol_col: str = "ts_code") -> pd.DataFrame:
-        """Convert Tushare minute bar to standard format."""
-        df = df.rename(columns={
-            symbol_col: "symbol",
-            "trade_time": "datetime_raw",
-            "vol": "volume",
-            "amount": "turnover",
-        })
-        # trade_time format: "2024-01-02 09:31:00"
-        df["date"] = df["datetime_raw"].str.replace("-", "").str[:8]
-        df["datetime"] = df["datetime_raw"].str.replace("-", "").str.replace(" ", "T").str.replace(":", "") + "000"
-        cols = ["symbol", "date", "datetime", "open", "close", "high", "low", "volume", "turnover"]
-        return df[cols].sort_values(["symbol", "datetime"]).reset_index(drop=True)
-
     def get_stock_minute_bar(
         self,
         symbol: str,
@@ -244,10 +247,6 @@ class TushareSource(BaseSource):
         df = self._rename_columns(df).sort_values(["symbol", "date"])
         cols = ["symbol", "date", "open", "close", "high", "low", "pre_close", "change", "pct_change", "volume", "turnover"]
         return df[cols].reset_index(drop=True)
-
-    _INDEX_LIST_FIELDS = (
-        "ts_code,name,fullname,market,base_date,base_point,list_date"
-    )
 
     def get_index_list(
         self,

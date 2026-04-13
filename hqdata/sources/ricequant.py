@@ -34,6 +34,52 @@ class RicequantSource(BaseSource):
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
+    _MINUTE_FREQ_MAP = {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '60m': '60m'}
+
+    @staticmethod
+    def _normalize_minute_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
+        """Convert get_price() minute output to hqdata standard minute bar format."""
+        df = df.reset_index()
+        df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
+        df['date'] = df['datetime'].dt.strftime('%Y%m%d')
+        df['datetime'] = df['datetime'].dt.strftime('%Y%m%dT%H%M%S') + '000'
+        df = df.rename(columns={'total_turnover': 'turnover'})
+        cols = ['symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover']
+        return df[cols].sort_values(['symbol', 'datetime']).reset_index(drop=True)
+
+    @staticmethod
+    def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
+        """Convert get_price() daily output to hqdata standard daily bar format."""
+        df = df.reset_index()
+        df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
+        df['date'] = df['date'].dt.strftime('%Y%m%d')
+        df = df.rename(columns={'total_turnover': 'turnover', 'prev_close': 'pre_close'})
+        df['change'] = (df['close'] - df['pre_close']).round(4)
+        df['pct_change'] = ((df['change'] / df['pre_close']) * 100).round(4)
+        cols = ['symbol', 'date', 'open', 'close', 'high', 'low',
+                'pre_close', 'change', 'pct_change', 'volume', 'turnover']
+        return df[cols].sort_values(['symbol', 'date']).reset_index(drop=True)
+
+    @staticmethod
+    def _get_hs_connect_stocks(rq) -> set:
+        """Return set of order_book_ids that are HS Connect eligible stocks.
+
+        Fetches data via get_stock_connect('all_connect') for the most recent
+        trading date that has available data (walks back up to 60 trading days).
+        Returns an empty set if no data is available.
+        """
+        today = date.today()
+        trading_dates = rq.get_trading_dates(
+            start_date=today.replace(year=today.year - 1),
+            end_date=today,
+            market='cn',
+        )
+        for d in reversed(trading_dates):
+            df = rq.get_stock_connect('all_connect', start_date=d, end_date=d)
+            if df is not None:
+                return set(df.index.get_level_values('order_book_id').unique())
+        return set()
+
     def __init__(
         self,
         username: Optional[str] = None,
@@ -82,50 +128,6 @@ class RicequantSource(BaseSource):
             use_zstd=True,
             enable_bjse=True
         )
-
-    @staticmethod
-    def _normalize_minute_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
-        """Convert get_price() minute output to hqdata standard minute bar format."""
-        df = df.reset_index()
-        df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
-        df['date'] = df['datetime'].dt.strftime('%Y%m%d')
-        df['datetime'] = df['datetime'].dt.strftime('%Y%m%dT%H%M%S') + '000'
-        df = df.rename(columns={'total_turnover': 'turnover'})
-        cols = ['symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover']
-        return df[cols].sort_values(['symbol', 'datetime']).reset_index(drop=True)
-
-    @staticmethod
-    def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
-        """Convert get_price() daily output to hqdata standard daily bar format."""
-        df = df.reset_index()
-        df['symbol'] = rq.id_convert(df['order_book_id'].tolist(), to='normal')
-        df['date'] = df['date'].dt.strftime('%Y%m%d')
-        df = df.rename(columns={'total_turnover': 'turnover', 'prev_close': 'pre_close'})
-        df['change'] = (df['close'] - df['pre_close']).round(4)
-        df['pct_change'] = ((df['change'] / df['pre_close']) * 100).round(4)
-        cols = ['symbol', 'date', 'open', 'close', 'high', 'low',
-                'pre_close', 'change', 'pct_change', 'volume', 'turnover']
-        return df[cols].sort_values(['symbol', 'date']).reset_index(drop=True)
-
-    @staticmethod
-    def _get_hs_connect_stocks(rq) -> set:
-        """Return set of order_book_ids that are HS Connect eligible stocks.
-
-        Fetches data via get_stock_connect('all_connect') for the most recent
-        trading date that has available data (walks back up to 60 trading days).
-        Returns an empty set if no data is available.
-        """
-        today = date.today()
-        trading_dates = rq.get_trading_dates(
-            start_date=today.replace(year=today.year - 1),
-            end_date=today,
-            market='cn',
-        )
-        for d in reversed(trading_dates):
-            df = rq.get_stock_connect('all_connect', start_date=d, end_date=d)
-            if df is not None:
-                return set(df.index.get_level_values('order_book_id').unique())
-        return set()
 
     def get_calendar(
         self,
@@ -226,8 +228,6 @@ class RicequantSource(BaseSource):
             'date': date.today().strftime('%Y%m%d'),
         })
         return result.sort_values('symbol').reset_index(drop=True)
-
-    _MINUTE_FREQ_MAP = {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '60m': '60m'}
 
     def get_stock_minute_bar(
         self,
