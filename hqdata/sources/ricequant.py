@@ -44,7 +44,7 @@ class RicequantSource(BaseSource):
         df['date'] = df['datetime'].dt.strftime('%Y%m%d')
         df['datetime'] = df['datetime'].dt.strftime('%Y%m%dT%H%M%S') + '000'
         df = df.rename(columns={'total_turnover': 'turnover'})
-        cols = ['symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover']
+        cols = ['symbol', 'date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'datetime']
         return df[cols].sort_values(['symbol', 'datetime']).reset_index(drop=True)
 
     @staticmethod
@@ -57,7 +57,7 @@ class RicequantSource(BaseSource):
         df['change'] = (df['close'] - df['pre_close']).round(4)
         df['pct_change'] = ((df['change'] / df['pre_close']) * 100).round(4)
         cols = ['symbol', 'date', 'open', 'close', 'high', 'low',
-                'pre_close', 'change', 'pct_change', 'volume', 'turnover']
+                'volume', 'turnover', 'pre_close', 'change', 'pct_change']
         return df[cols].sort_values(['symbol', 'date']).reset_index(drop=True)
 
     @staticmethod
@@ -177,8 +177,8 @@ class RicequantSource(BaseSource):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, exchange, board, industry,
-            curr_type, list_date, delist_date, is_hs, date
+            DataFrame with columns: symbol, date, name, exchange, board, industry,
+            curr_type, list_date, delist_date, is_hs
         """
         rq = _get_rqdatac()
         df = rq.all_instruments(type='CS', date=date.today())
@@ -217,6 +217,7 @@ class RicequantSource(BaseSource):
         hs_stocks = self._get_hs_connect_stocks(rq)
         result = pd.DataFrame({
             'symbol': rq.id_convert(df['order_book_id'].tolist(), to='normal'),
+            'date': date.today().strftime('%Y%m%d'),
             'name': df['symbol'].tolist(),
             'exchange': df['exchange'].map(self._REVERSE_EXCHANGE_MAP).tolist(),
             'board': df['board_type'].map(self._REVERSE_BOARD_MAP).tolist(),
@@ -225,7 +226,6 @@ class RicequantSource(BaseSource):
             'list_date': df['listed_date'].tolist(),
             'delist_date': df['de_listed_date'].tolist(),
             'is_hs': df['order_book_id'].isin(hs_stocks).map({True: 'Y', False: 'N'}).tolist(),
-            'date': date.today().strftime('%Y%m%d'),
         })
         return result.sort_values('symbol').reset_index(drop=True)
 
@@ -245,7 +245,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
@@ -277,7 +277,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
         """
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
@@ -308,7 +308,7 @@ class RicequantSource(BaseSource):
             market: see README, supports comma-separated multiple markets.
 
         Returns:
-            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date, date
+            DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
         """
         use_symbol = symbol and symbol.strip()
         use_market = market and market.strip() if not use_symbol else None
@@ -340,13 +340,13 @@ class RicequantSource(BaseSource):
             return self._empty_index_list()
         result = pd.DataFrame({
             'symbol': rq.id_convert(df['order_book_id'].tolist(), to='normal'),
+            'date': date.today().strftime('%Y%m%d'),
             'name': df['symbol'].tolist(),
             'fullname': df['symbol'].tolist(),  # rqdatac does not provide a separate full name
             'market': df['exchange'].map(self._REVERSE_EXCHANGE_MAP).tolist(),
             'base_date': df['base_date'].tolist(),
             'base_point': df['base_point'].tolist(),
             'list_date': df['listed_date'].tolist(),
-            'date': date.today().strftime('%Y%m%d'),
         })
         return result.sort_values('symbol').reset_index(drop=True)
 
@@ -366,7 +366,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
@@ -398,7 +398,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
         """
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])

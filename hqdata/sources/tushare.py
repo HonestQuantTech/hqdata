@@ -93,7 +93,7 @@ class TushareSource(BaseSource):
         # trade_time format: "2024-01-02 09:31:00"
         df["date"] = df["datetime_raw"].str.replace("-", "").str[:8]
         df["datetime"] = df["datetime_raw"].str.replace("-", "").str.replace(" ", "T").str.replace(":", "") + "000"
-        cols = ["symbol", "date", "datetime", "open", "close", "high", "low", "volume", "turnover"]
+        cols = ["symbol", "date", "open", "close", "high", "low", "volume", "turnover", "datetime"]
         return df[cols].sort_values(["symbol", "datetime"]).reset_index(drop=True)
 
     def __init__(self, token: Optional[str] = None):
@@ -155,8 +155,8 @@ class TushareSource(BaseSource):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, exchange, board, industry,
-            curr_type, list_date, delist_date, is_hs, date
+            DataFrame with columns: symbol, date, name, exchange, board, industry,
+            curr_type, list_date, delist_date, is_hs
         """
         # Map English board abbreviations to Chinese names for tushare API
         if board:
@@ -182,8 +182,8 @@ class TushareSource(BaseSource):
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
         df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
-        cols = ['symbol', 'name', 'exchange', 'board', 'industry',
-                   'curr_type', 'list_date', 'delist_date', 'is_hs', 'date']
+        cols = ['symbol', 'date', 'name', 'exchange', 'board', 'industry',
+                   'curr_type', 'list_date', 'delist_date', 'is_hs']
         return df[cols]
 
     def get_stock_minute_bar(
@@ -202,7 +202,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
@@ -237,7 +237,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
         """
         self._rate_limiter.acquire()
         df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
@@ -245,7 +245,7 @@ class TushareSource(BaseSource):
         if df is None or df.empty:
             return self._empty_stock_daily_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
-        cols = ["symbol", "date", "open", "close", "high", "low", "pre_close", "change", "pct_change", "volume", "turnover"]
+        cols = ["symbol", "date", "open", "close", "high", "low", "volume", "turnover", "pre_close", "change", "pct_change"]
         return df[cols].reset_index(drop=True)
 
     def get_index_list(
@@ -260,7 +260,7 @@ class TushareSource(BaseSource):
             market: see README, supports comma-separated multiple markets.
 
         Returns:
-            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date, date
+            DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
         """
         use_symbol = symbol and symbol.strip()
         use_market = market and market.strip() if not use_symbol else None
@@ -291,7 +291,8 @@ class TushareSource(BaseSource):
             return self._empty_index_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = date.today().strftime("%Y%m%d")
-        return df
+        cols = ['symbol', 'date', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date']
+        return df[cols]
 
     def get_index_minute_bar(
         self,
@@ -309,7 +310,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'")
@@ -344,7 +345,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
         """
         symbols = [s.strip() for s in symbol.split(",")]
         dfs = []
@@ -358,5 +359,5 @@ class TushareSource(BaseSource):
         if df is None or df.empty:
             return self._empty_index_daily_bar()
         df = self._rename_columns(df).sort_values(["symbol", "date"])
-        cols = ["symbol", "date", "open", "close", "high", "low", "pre_close", "change", "pct_change", "volume", "turnover"]
+        cols = ["symbol", "date", "open", "close", "high", "low", "volume", "turnover", "pre_close", "change", "pct_change"]
         return df[cols].reset_index(drop=True)

@@ -23,40 +23,40 @@ class BaseSource(ABC):
     @staticmethod
     def _empty_stock_list() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'name', 'exchange', 'board', 'industry',
-            'curr_type', 'list_date', 'delist_date', 'is_hs', 'date',
+            'symbol', 'date', 'name', 'exchange', 'board', 'industry',
+            'curr_type', 'list_date', 'delist_date', 'is_hs',
         ])
 
     @staticmethod
     def _empty_stock_minute_bar() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover',
+            'symbol', 'date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'datetime',
         ])
 
     @staticmethod
     def _empty_stock_daily_bar() -> pd.DataFrame:
         return pd.DataFrame(columns=[
             'symbol', 'date', 'open', 'close', 'high', 'low',
-            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
+            'volume', 'turnover', 'pre_close', 'change', 'pct_change',
         ])
 
     @staticmethod
     def _empty_index_list() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date', 'date',
+            'symbol', 'date', 'name', 'fullname', 'market', 'base_date', 'base_point', 'list_date',
         ])
 
     @staticmethod
     def _empty_index_minute_bar() -> pd.DataFrame:
         return pd.DataFrame(columns=[
-            'symbol', 'date', 'datetime', 'open', 'close', 'high', 'low', 'volume', 'turnover',
+            'symbol', 'date', 'open', 'close', 'high', 'low', 'volume', 'turnover', 'datetime',
         ])
 
     @staticmethod
     def _empty_index_daily_bar() -> pd.DataFrame:
         return pd.DataFrame(columns=[
             'symbol', 'date', 'open', 'close', 'high', 'low',
-            'pre_close', 'change', 'pct_change', 'volume', 'turnover',
+            'volume', 'turnover', 'pre_close', 'change', 'pct_change',
         ])
 
     @abstractmethod
@@ -93,8 +93,8 @@ class BaseSource(ABC):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, name, exchange, board, industry,
-            curr_type, list_date, delist_date, is_hs, date
+            DataFrame with columns: symbol, date, name, exchange, board, industry,
+            curr_type, list_date, delist_date, is_hs
         """
         pass
 
@@ -115,7 +115,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         pass
 
@@ -134,7 +134,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
         """
         pass
 
@@ -151,7 +151,7 @@ class BaseSource(ABC):
             market: see README, supports comma-separated multiple markets.
 
         Returns:
-            DataFrame with columns: symbol, name, fullname, market, base_date, base_point, list_date, date
+            DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
         """
         pass
 
@@ -172,7 +172,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, datetime, open, close, high, low, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
         """
         pass
 
@@ -191,6 +191,6 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, pre_close, change, pct_change, volume, turnover
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
         """
         pass
