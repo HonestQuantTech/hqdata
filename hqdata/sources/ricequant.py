@@ -51,13 +51,16 @@ class RicequantSource(BaseSource):
         df["date"] = df["datetime"].dt.strftime("%Y%m%d")
         df["exch_timestamp"] = df["datetime"].dt.strftime("%Y%m%dT%H%M%S") + "000"
         df = df.rename(columns={"total_turnover": "turnover"})
+        # rqdatac minute bar: volume unit is 股(shares), normalize to 手(lots)
+        if "volume" in df.columns:
+            df["volume"] = (df["volume"] / 100).astype("int64")
         cols = [
             "symbol",
             "date",
             "open",
-            "close",
             "high",
             "low",
+            "close",
             "volume",
             "turnover",
             "exch_timestamp",
@@ -75,16 +78,19 @@ class RicequantSource(BaseSource):
         )
         df["change"] = (df["close"] - df["pre_close"]).round(4)
         df["pct_change"] = ((df["change"] / df["pre_close"]) * 100).round(4)
+        # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
+        if "volume" in df.columns:
+            df["volume"] = (df["volume"] / 100).astype("int64")
         cols = [
             "symbol",
             "date",
+            "pre_close",
             "open",
-            "close",
             "high",
             "low",
+            "close",
             "volume",
             "turnover",
-            "pre_close",
             "change",
             "pct_change",
         ]
@@ -287,7 +293,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
@@ -324,7 +330,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
@@ -420,7 +426,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
@@ -457,7 +463,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
         rq = _get_rqdatac()
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])

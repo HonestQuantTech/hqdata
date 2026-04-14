@@ -44,9 +44,9 @@ class BaseSource(ABC):
                 "symbol",
                 "date",
                 "open",
-                "close",
                 "high",
                 "low",
+                "close",
                 "volume",
                 "turnover",
                 "exch_timestamp",
@@ -59,13 +59,13 @@ class BaseSource(ABC):
             columns=[
                 "symbol",
                 "date",
+                "pre_close",
                 "open",
-                "close",
                 "high",
                 "low",
+                "close",
                 "volume",
                 "turnover",
-                "pre_close",
                 "change",
                 "pct_change",
             ]
@@ -93,9 +93,9 @@ class BaseSource(ABC):
                 "symbol",
                 "date",
                 "open",
-                "close",
                 "high",
                 "low",
+                "close",
                 "volume",
                 "turnover",
                 "exch_timestamp",
@@ -108,13 +108,13 @@ class BaseSource(ABC):
             columns=[
                 "symbol",
                 "date",
+                "pre_close",
                 "open",
-                "close",
                 "high",
                 "low",
+                "close",
                 "volume",
                 "turnover",
-                "pre_close",
                 "change",
                 "pct_change",
             ]
@@ -176,7 +176,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
         """
         pass
 
@@ -195,7 +195,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
         pass
 
@@ -233,7 +233,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
         """
         pass
 
@@ -252,6 +252,6 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
         pass

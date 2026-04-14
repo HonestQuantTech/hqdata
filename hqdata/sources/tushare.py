@@ -87,10 +87,10 @@ class TushareSource(BaseSource):
                 "amount": "turnover",
             }
         )
-        # Tushare daily bar: volume unit is 手(100股), turnover unit is 千元
-        # Normalize to 股 and 元 to match other sources
+        # Tushare daily bar: volume unit is 手(lots), turnover unit is 千元
+        # Normalize turnover to 元; volume stays in 手 to match other sources
         if "volume" in df.columns:
-            df["volume"] = (df["volume"] * 100).astype("int64")
+            df["volume"] = df["volume"].astype("int64")
         if "turnover" in df.columns:
             df["turnover"] = df["turnover"] * 1000
         return df
@@ -108,6 +108,9 @@ class TushareSource(BaseSource):
                 "amount": "turnover",
             }
         )
+        # Tushare minute bar: volume unit is 股(shares), normalize to 手(lots)
+        if "volume" in df.columns:
+            df["volume"] = (df["volume"] / 100).astype("int64")
         # trade_time format: "2024-01-02 09:31:00"
         df["date"] = df["datetime_raw"].str.replace("-", "").str[:8]
         df["exch_timestamp"] = (
@@ -121,9 +124,9 @@ class TushareSource(BaseSource):
             "symbol",
             "date",
             "open",
-            "close",
             "high",
             "low",
+            "close",
             "volume",
             "turnover",
             "exch_timestamp",
@@ -247,7 +250,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
@@ -294,7 +297,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
         self._rate_limiter.acquire()
         df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
@@ -305,13 +308,13 @@ class TushareSource(BaseSource):
         cols = [
             "symbol",
             "date",
+            "pre_close",
             "open",
-            "close",
             "high",
             "low",
+            "close",
             "volume",
             "turnover",
-            "pre_close",
             "change",
             "pct_change",
         ]
@@ -388,7 +391,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
@@ -435,7 +438,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, pre_close, change, pct_change
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
         symbols = [s.strip() for s in symbol.split(",")]
         dfs = []
@@ -454,13 +457,13 @@ class TushareSource(BaseSource):
         cols = [
             "symbol",
             "date",
+            "pre_close",
             "open",
-            "close",
             "high",
             "low",
+            "close",
             "volume",
             "turnover",
-            "pre_close",
             "change",
             "pct_change",
         ]
