@@ -72,6 +72,43 @@ class BaseSource(ABC):
         )
 
     @staticmethod
+    def _empty_stock_snapshot() -> pd.DataFrame:
+        return pd.DataFrame(
+            columns=[
+                "ets",
+                "lts",
+                "symbol",
+                "pre_close",
+                "open",
+                "high",
+                "low",
+                "last",
+                "volume",
+                "turnover",
+                "ap1",
+                "ap2",
+                "ap3",
+                "ap4",
+                "ap5",
+                "av1",
+                "av2",
+                "av3",
+                "av4",
+                "av5",
+                "bp1",
+                "bp2",
+                "bp3",
+                "bp4",
+                "bp5",
+                "bv1",
+                "bv2",
+                "bv3",
+                "bv4",
+                "bv5",
+            ]
+        )
+
+    @staticmethod
     def _empty_index_list() -> pd.DataFrame:
         return pd.DataFrame(
             columns=[
@@ -156,6 +193,19 @@ class BaseSource(ABC):
         Returns:
             DataFrame with columns: symbol, date, name, exchange, board, industry,
             curr_type, list_date, delist_date, is_hs
+        """
+        pass
+
+    @abstractmethod
+    def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
+        """Get real-time stock snapshot with 5-level order book.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+
+        Returns:
+            DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
+            volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
         """
         pass
 

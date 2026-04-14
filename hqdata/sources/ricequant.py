@@ -277,6 +277,91 @@ class RicequantSource(BaseSource):
         )
         return result.sort_values("symbol").reset_index(drop=True)
 
+    def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
+        """Get real-time stock snapshot with 5-level order book.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+
+        Returns:
+            DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
+            volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
+        """
+        from datetime import datetime
+
+        rq = _get_rqdatac()
+        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
+        if isinstance(rq_symbols, str):
+            rq_symbols = [rq_symbols]
+        ticks = rq.current_snapshot(rq_symbols)
+        if not ticks:
+            return self._empty_stock_snapshot()
+        if not isinstance(ticks, list):
+            ticks = [ticks]
+        lts = datetime.now().strftime("%Y%m%dT%H%M%S") + "000"
+        rows = []
+        for tick in ticks:
+            row = {
+                "ets": tick.datetime.strftime("%Y%m%dT%H%M%S")
+                + f"{tick.datetime.microsecond // 1000:03d}",
+                "lts": lts,
+                "symbol": rq.id_convert(tick.order_book_id, to="normal"),
+                "pre_close": tick.prev_close,
+                "open": tick.open,
+                "high": tick.high,
+                "low": tick.low,
+                "last": tick.last,
+                "volume": int(tick.volume / 100),
+                "turnover": tick.total_turnover,
+            }
+            asks = tick.asks if isinstance(tick.asks, list) else []
+            ask_vols = tick.ask_vols if isinstance(tick.ask_vols, list) else []
+            bids = tick.bids if isinstance(tick.bids, list) else []
+            bid_vols = tick.bid_vols if isinstance(tick.bid_vols, list) else []
+            for i in range(5):
+                row[f"ap{i+1}"] = asks[i] if i < len(asks) else None
+                row[f"av{i+1}"] = int(ask_vols[i] / 100) if i < len(ask_vols) else None
+                row[f"bp{i+1}"] = bids[i] if i < len(bids) else None
+                row[f"bv{i+1}"] = int(bid_vols[i] / 100) if i < len(bid_vols) else None
+            rows.append(row)
+        cols = [
+            "ets",
+            "lts",
+            "symbol",
+            "pre_close",
+            "open",
+            "high",
+            "low",
+            "last",
+            "volume",
+            "turnover",
+            "ap1",
+            "ap2",
+            "ap3",
+            "ap4",
+            "ap5",
+            "av1",
+            "av2",
+            "av3",
+            "av4",
+            "av5",
+            "bp1",
+            "bp2",
+            "bp3",
+            "bp4",
+            "bp5",
+            "bv1",
+            "bv2",
+            "bv3",
+            "bv4",
+            "bv5",
+        ]
+        return (
+            pd.DataFrame(rows, columns=cols)
+            .sort_values(["ets", "symbol"])
+            .reset_index(drop=True)
+        )
+
     def get_stock_minute_bar(
         self,
         symbol: str,

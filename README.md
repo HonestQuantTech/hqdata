@@ -84,6 +84,9 @@ hqdata.get_stock_list(exchange="SSE,SZSE") # 按交易所筛选
 hqdata.get_stock_list(board="MB,GEM,STAR") # 按板块筛选
 hqdata.get_stock_list(board="MB", exchange="SSE") # 多参数时取交集
 
+# 查询股票实时行情快照（含5档盘口）
+hqdata.get_stock_snapshot("000001.SZ,600000.SH")
+
 # 查询股票分钟线数据
 hqdata.get_stock_minute_bar("000001.SZ,600000.SH", frequency="1m", start_date="20260401", end_date="20260401")
 

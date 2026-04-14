@@ -234,6 +234,109 @@ class TushareSource(BaseSource):
         ]
         return df[cols]
 
+    def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
+        """Get real-time stock snapshot with 5-level order book.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+
+        Returns:
+            DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
+            volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
+        """
+        from datetime import datetime
+
+        ts = _get_tushare()
+        symbols = [s.strip() for s in symbol.split(",")]
+        chunks = [symbols[i : i + 50] for i in range(0, len(symbols), 50)]
+        dfs = []
+        for chunk in chunks:
+            self._rate_limiter.acquire()
+            df_chunk = ts.realtime_quote(ts_code=",".join(chunk), src="sina")
+            if df_chunk is not None and not df_chunk.empty:
+                dfs.append(df_chunk)
+        if not dfs:
+            return self._empty_stock_snapshot()
+        df = pd.concat(dfs, ignore_index=True)
+        df = df.rename(
+            columns={
+                "TS_CODE": "symbol",
+                "PRE_CLOSE": "pre_close",
+                "OPEN": "open",
+                "HIGH": "high",
+                "LOW": "low",
+                "PRICE": "last",
+                "VOLUME": "volume",
+                "AMOUNT": "turnover",
+                "DATE": "date_raw",
+                "TIME": "time_raw",
+                "A1_P": "ap1",
+                "A2_P": "ap2",
+                "A3_P": "ap3",
+                "A4_P": "ap4",
+                "A5_P": "ap5",
+                "A1_V": "av1",
+                "A2_V": "av2",
+                "A3_V": "av3",
+                "A4_V": "av4",
+                "A5_V": "av5",
+                "B1_P": "bp1",
+                "B2_P": "bp2",
+                "B3_P": "bp3",
+                "B4_P": "bp4",
+                "B5_P": "bp5",
+                "B1_V": "bv1",
+                "B2_V": "bv2",
+                "B3_V": "bv3",
+                "B4_V": "bv4",
+                "B5_V": "bv5",
+            }
+        )
+        # ets: YYYYMMDD + HH:MM:SS → YYYYMMDDTHHMMSSsss
+        df["ets"] = (
+            df["date_raw"].astype(str)
+            + "T"
+            + df["time_raw"].str.replace(":", "", regex=False)
+            + "000"
+        )
+        lts = datetime.now().strftime("%Y%m%dT%H%M%S") + "000"
+        df["lts"] = lts
+        # volume: 股 → 手
+        df["volume"] = (df["volume"] / 100).astype("int64")
+        cols = [
+            "ets",
+            "lts",
+            "symbol",
+            "pre_close",
+            "open",
+            "high",
+            "low",
+            "last",
+            "volume",
+            "turnover",
+            "ap1",
+            "ap2",
+            "ap3",
+            "ap4",
+            "ap5",
+            "av1",
+            "av2",
+            "av3",
+            "av4",
+            "av5",
+            "bp1",
+            "bp2",
+            "bp3",
+            "bp4",
+            "bp5",
+            "bv1",
+            "bv2",
+            "bv3",
+            "bv4",
+            "bv5",
+        ]
+        return df[cols].sort_values(["ets", "symbol"]).reset_index(drop=True)
+
     def get_stock_minute_bar(
         self,
         symbol: str,

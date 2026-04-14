@@ -162,6 +162,60 @@ class TestTushareIntegration:
         assert df3["board"].str.contains("MB").all()
         assert df3["exchange"].str.contains("SZSE").all()
 
+    def test_get_stock_snapshot(self):
+        """Test get_stock_snapshot returns well-formed data for both markets."""
+        import re
+
+        expected_columns = {
+            "ets",
+            "lts",
+            "symbol",
+            "pre_close",
+            "open",
+            "high",
+            "low",
+            "last",
+            "volume",
+            "turnover",
+            "ap1",
+            "ap2",
+            "ap3",
+            "ap4",
+            "ap5",
+            "av1",
+            "av2",
+            "av3",
+            "av4",
+            "av5",
+            "bp1",
+            "bp2",
+            "bp3",
+            "bp4",
+            "bp5",
+            "bv1",
+            "bv2",
+            "bv3",
+            "bv4",
+            "bv5",
+        }
+        df = self.source.get_stock_snapshot("000001.SZ,600000.SH")
+        assert not df.empty, "get_stock_snapshot returned empty DataFrame"
+        assert expected_columns.issubset(
+            df.columns
+        ), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert set(df["symbol"]) == {
+            "000001.SZ",
+            "600000.SH",
+        }, f"Unexpected symbols: {set(df['symbol'])}"
+        assert (df["volume"] > 0).all(), "volume should be > 0"
+        ts_pattern = re.compile(r"^\d{8}T\d{9}$")
+        assert (
+            df["ets"].apply(lambda x: bool(ts_pattern.match(x))).all()
+        ), "ets format should be YYYYMMDDTHHMMSSsss"
+        assert (
+            df["lts"].apply(lambda x: bool(ts_pattern.match(x))).all()
+        ), "lts format should be YYYYMMDDTHHMMSSsss"
+
     def test_get_stock_daily_bar(self):
         """Test get_stock_daily_bar returns well-formed data for both markets."""
         expected_columns = {

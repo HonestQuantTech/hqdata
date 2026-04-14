@@ -127,6 +127,21 @@ def get_stock_list(
     return _source.get_stock_list(symbol=symbol, exchange=exchange, board=board)
 
 
+def get_stock_snapshot(symbol: str) -> pd.DataFrame:
+    """Get real-time stock snapshot with 5-level order book.
+
+    Args:
+        symbol: see README, supports comma-separated multiple codes
+
+    Returns:
+        DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
+        volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
+    """
+    if _source is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _source.get_stock_snapshot(symbol)
+
+
 def get_stock_minute_bar(
     symbol: str,
     frequency: str,
