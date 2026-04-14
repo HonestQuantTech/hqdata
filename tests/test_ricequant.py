@@ -171,7 +171,7 @@ class TestRicequantIntegration:
         expected_columns = {
             "symbol",
             "date",
-            "datetime",
+            "exch_timestamp",
             "open",
             "close",
             "high",
@@ -188,8 +188,8 @@ class TestRicequantIntegration:
             ), f"Missing columns: {expected_columns - set(df.columns)}"
             assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
             assert (
-                df["datetime"].str.match(r"^\d{8}T\d{6}\d{3}$").all()
-            ), "datetime not in YYYYMMDDTHHMMSSsss format"
+                df["exch_timestamp"].str.match(r"^\d{8}T\d{6}\d{3}$").all()
+            ), "exch_timestamp not in YYYYMMDDTHHMMSSsss format"
             assert (df["high"] >= df["low"]).all(), "high < low found"
 
     def test_get_stock_daily_bar(self):
@@ -405,7 +405,7 @@ class TestRicequantIntegration:
         expected_columns = {
             "symbol",
             "date",
-            "datetime",
+            "exch_timestamp",
             "open",
             "close",
             "high",
@@ -421,8 +421,8 @@ class TestRicequantIntegration:
         ), f"Missing columns: {expected_columns - set(df.columns)}"
         assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
         assert (
-            df["datetime"].str.match(r"^\d{8}T\d{6}\d{3}$").all()
-        ), "datetime not in YYYYMMDDTHHMMSSsss format"
+            df["exch_timestamp"].str.match(r"^\d{8}T\d{6}\d{3}$").all()
+        ), "exch_timestamp not in YYYYMMDDTHHMMSSsss format"
         assert (df["high"] >= df["low"]).all(), "high < low found"
 
     def test_get_index_minute_bar_multiple_symbols(self):
@@ -430,7 +430,7 @@ class TestRicequantIntegration:
         expected_columns = {
             "symbol",
             "date",
-            "datetime",
+            "exch_timestamp",
             "open",
             "close",
             "high",

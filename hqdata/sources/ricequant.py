@@ -49,7 +49,7 @@ class RicequantSource(BaseSource):
         df = df.reset_index()
         df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
         df["date"] = df["datetime"].dt.strftime("%Y%m%d")
-        df["datetime"] = df["datetime"].dt.strftime("%Y%m%dT%H%M%S") + "000"
+        df["exch_timestamp"] = df["datetime"].dt.strftime("%Y%m%dT%H%M%S") + "000"
         df = df.rename(columns={"total_turnover": "turnover"})
         cols = [
             "symbol",
@@ -60,9 +60,9 @@ class RicequantSource(BaseSource):
             "low",
             "volume",
             "turnover",
-            "datetime",
+            "exch_timestamp",
         ]
-        return df[cols].sort_values(["symbol", "datetime"]).reset_index(drop=True)
+        return df[cols].sort_values(["symbol", "exch_timestamp"]).reset_index(drop=True)
 
     @staticmethod
     def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
@@ -287,7 +287,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
@@ -420,7 +420,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, datetime
+            DataFrame with columns: symbol, date, open, close, high, low, volume, turnover, exch_timestamp
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
