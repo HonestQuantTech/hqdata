@@ -142,7 +142,7 @@ def get_stock_minute_bar(
         end_date: see README
 
     Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
@@ -208,7 +208,7 @@ def get_index_minute_bar(
         end_date: see README
 
     Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")

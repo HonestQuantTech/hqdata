@@ -49,7 +49,7 @@ class BaseSource(ABC):
                 "close",
                 "volume",
                 "turnover",
-                "exch_timestamp",
+                "ets",
             ]
         )
 
@@ -98,7 +98,7 @@ class BaseSource(ABC):
                 "close",
                 "volume",
                 "turnover",
-                "exch_timestamp",
+                "ets",
             ]
         )
 
@@ -176,7 +176,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
         """
         pass
 
@@ -233,7 +233,7 @@ class BaseSource(ABC):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
         """
         pass
 

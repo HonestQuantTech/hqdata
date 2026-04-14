@@ -49,7 +49,7 @@ class RicequantSource(BaseSource):
         df = df.reset_index()
         df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
         df["date"] = df["datetime"].dt.strftime("%Y%m%d")
-        df["exch_timestamp"] = df["datetime"].dt.strftime("%Y%m%dT%H%M%S") + "000"
+        df["ets"] = df["datetime"].dt.strftime("%Y%m%dT%H%M%S") + "000"
         df = df.rename(columns={"total_turnover": "turnover"})
         # rqdatac minute bar: volume unit is 股(shares), normalize to 手(lots)
         if "volume" in df.columns:
@@ -63,9 +63,9 @@ class RicequantSource(BaseSource):
             "close",
             "volume",
             "turnover",
-            "exch_timestamp",
+            "ets",
         ]
-        return df[cols].sort_values(["symbol", "exch_timestamp"]).reset_index(drop=True)
+        return df[cols].sort_values(["symbol", "ets"]).reset_index(drop=True)
 
     @staticmethod
     def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
@@ -293,7 +293,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
@@ -426,7 +426,7 @@ class RicequantSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(

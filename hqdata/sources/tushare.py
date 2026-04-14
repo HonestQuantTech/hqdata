@@ -113,7 +113,7 @@ class TushareSource(BaseSource):
             df["volume"] = (df["volume"] / 100).astype("int64")
         # trade_time format: "2024-01-02 09:31:00"
         df["date"] = df["datetime_raw"].str.replace("-", "").str[:8]
-        df["exch_timestamp"] = (
+        df["ets"] = (
             df["datetime_raw"]
             .str.replace("-", "")
             .str.replace(" ", "T")
@@ -129,9 +129,9 @@ class TushareSource(BaseSource):
             "close",
             "volume",
             "turnover",
-            "exch_timestamp",
+            "ets",
         ]
-        return df[cols].sort_values(["symbol", "exch_timestamp"]).reset_index(drop=True)
+        return df[cols].sort_values(["symbol", "ets"]).reset_index(drop=True)
 
     def __init__(self, token: Optional[str] = None):
         """Initialize tushare connection.
@@ -250,7 +250,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
@@ -391,7 +391,7 @@ class TushareSource(BaseSource):
             end_date: see README
 
         Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, exch_timestamp
+            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
         """
         if frequency not in self._MINUTE_FREQ_MAP:
             raise ValueError(
