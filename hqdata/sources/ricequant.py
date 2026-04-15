@@ -298,7 +298,8 @@ class RicequantSource(BaseSource):
             return self._empty_stock_snapshot()
         if not isinstance(ticks, list):
             ticks = [ticks]
-        lts = datetime.now().strftime("%Y%m%dT%H%M%S") + "000"
+        now = datetime.now()
+        lts = now.strftime("%Y%m%dT%H%M%S") + f"{now.microsecond // 1000:03d}"
         rows = []
         for tick in ticks:
             row = {

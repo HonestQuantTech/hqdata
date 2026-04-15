@@ -299,7 +299,8 @@ class TushareSource(BaseSource):
             + df["time_raw"].str.replace(":", "", regex=False)
             + "000"
         )
-        lts = datetime.now().strftime("%Y%m%dT%H%M%S") + "000"
+        now = datetime.now()
+        lts = now.strftime("%Y%m%dT%H%M%S") + f"{now.microsecond // 1000:03d}"
         df["lts"] = lts
         # volume: 股 → 手
         df["volume"] = (df["volume"] / 100).astype("int64")
