@@ -106,6 +106,59 @@ hqdata.get_index_minute_bar("000300.SH,000905.SH", frequency="1m", start_date="2
 hqdata.get_index_daily_bar("000300.SH,000905.SH", start_date="20260101", end_date="20260401")
 ```
 
+
+## 命令行工具
+
+安装后可直接使用 `hqdata` 命令从数据源拉取数据并按日期存储为 CSV 文件。
+
+### 命令格式
+
+```bash
+hqdata [--source SOURCE] [--output DIR] COMMAND [options]
+```
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--source` | 数据源，逗号分隔，可选 `tushare`, `ricequant` | `tushare` |
+| `--output` | 输出根目录 | `~/.hqdata` |
+
+### 子命令一览
+
+```bash
+# 股票日线（按日期分文件）
+hqdata stock-daily --start 20260101 --end 20261231
+
+# 股票分钟线（支持 --frequency 1m/5m/15m/30m/60m，默认 1m）
+hqdata stock-minute --start 20260101 --end 20260103 --frequency 5m
+
+# 指数日线
+hqdata index-daily --start 20260101 --end 20261231
+
+# 指数分钟线
+hqdata index-minute --start 20260101 --end 20260103 --frequency 15m
+
+# 当日股票列表（存为 {today}.csv）
+hqdata stock-list
+
+# 当日指数列表（可选市场过滤，默认 SSE,SZSE）
+hqdata index-list [--market SSE,SZSE]
+
+# 交易日历（start/end 为必填）
+hqdata calendar --start 20200101 --end 20251231
+```
+
+### 多源示例
+
+```bash
+# 同时拉取 Tushare 和米筐，分别存入各自目录，方便对比
+hqdata --source tushare,ricequant stock-daily --start 20260101 --end 20260110
+
+# 指定输出目录
+hqdata --source ricequant --output /data/market stock-minute --start 20260101 --end 20260103 --frequency 5m
+```
+
+> **说明**：日线/分钟线数据会先通过 `get_stock_list()`/`get_index_list()` 获取当日标的列表，再逐一查询每个 symbol 的行情数据，最终按日期合并写入 CSV。
+
 ## 测试
 
 ```bash

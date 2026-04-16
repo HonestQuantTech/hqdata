@@ -42,6 +42,9 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 
+[project.scripts]
+hqdata = "hqdata.cli:main"
+
 [project.urls]
 Homepage = "https://honestquant.com/hqdata"
 Source = "https://github.com/HonestQuantTech/hqdata"
