@@ -56,25 +56,19 @@ def _fetch_bar_data(
     bar_kwargs["end_date"] = getattr(args, "end", None)
 
     print(f"[{source}][{cmd}] {total} symbols found. Fetching bars...")
-    frames: List[pd.DataFrame] = []
-    for i, symbol in enumerate(symbols, 1):
-        print(f"[{source}][{cmd}] {i}/{total} {symbol} ...", flush=True)
-        try:
-            df = get_bar_fn(symbol, **bar_kwargs)
-            if not df.empty:
-                frames.append(df)
-        except Exception as e:
-            print(
-                f"[{source}][{cmd}] WARNING: {symbol} failed: {e}",
-                file=sys.stderr,
-            )
+    all_symbols = ",".join(symbols)
+    try:
+        df = get_bar_fn(all_symbols, **bar_kwargs)
+    except Exception as e:
+        print(f"[{source}][{cmd}] ERROR: {e}", file=sys.stderr)
+        return
 
-    if not frames:
+    if df.empty:
         print(f"[{source}][{cmd}] No data fetched.")
         return
 
     out_dir = output_root / source / sub_dir
-    _write_by_date(frames, out_dir, f"{source}][{cmd}")
+    _write_by_date([df], out_dir, f"{source}][{cmd}")
 
 
 def fetch_stock_daily(source: str, args, output_root: Path) -> None:
@@ -148,8 +142,7 @@ def fetch_calendar(source: str, args, output_root: Path) -> None:
     print(f"[{source}][calendar] Fetching calendar ({args.start} ~ {args.end})...")
     df = hqdata.get_calendar(args.start, args.end)
     out_path = output_root / source / "calendar.csv"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_path, index=False, encoding="utf-8")
+    _write_csv(df, out_path)
     print(f"[{source}][calendar] Done. Written to {out_path}")
 
 
@@ -199,19 +192,31 @@ def build_parser() -> argparse.ArgumentParser:
     # --- stock-daily ---
     p_sd = subparsers.add_parser("stock-daily", help="Fetch stock daily bar data")
     p_sd.add_argument(
-        "--start", default=None, metavar="YYYYMMDD", help="Start date (default: today)"
+        "--start",
+        default=None,
+        metavar="YYYYMMDD",
+        help="Start date (default: current trading day)",
     )
     p_sd.add_argument(
-        "--end", default=None, metavar="YYYYMMDD", help="End date (default: today)"
+        "--end",
+        default=None,
+        metavar="YYYYMMDD",
+        help="End date (default: current trading day)",
     )
 
     # --- stock-minute ---
     p_sm = subparsers.add_parser("stock-minute", help="Fetch stock minute bar data")
     p_sm.add_argument(
-        "--start", default=None, metavar="YYYYMMDD", help="Start date (default: today)"
+        "--start",
+        default=None,
+        metavar="YYYYMMDD",
+        help="Start date (default: current trading day)",
     )
     p_sm.add_argument(
-        "--end", default=None, metavar="YYYYMMDD", help="End date (default: today)"
+        "--end",
+        default=None,
+        metavar="YYYYMMDD",
+        help="End date (default: current trading day)",
     )
     p_sm.add_argument(
         "--frequency",
@@ -223,19 +228,31 @@ def build_parser() -> argparse.ArgumentParser:
     # --- index-daily ---
     p_id = subparsers.add_parser("index-daily", help="Fetch index daily bar data")
     p_id.add_argument(
-        "--start", default=None, metavar="YYYYMMDD", help="Start date (default: today)"
+        "--start",
+        default=None,
+        metavar="YYYYMMDD",
+        help="Start date (default: current trading day)",
     )
     p_id.add_argument(
-        "--end", default=None, metavar="YYYYMMDD", help="End date (default: today)"
+        "--end",
+        default=None,
+        metavar="YYYYMMDD",
+        help="End date (default: current trading day)",
     )
 
     # --- index-minute ---
     p_im = subparsers.add_parser("index-minute", help="Fetch index minute bar data")
     p_im.add_argument(
-        "--start", default=None, metavar="YYYYMMDD", help="Start date (default: today)"
+        "--start",
+        default=None,
+        metavar="YYYYMMDD",
+        help="Start date (default: current trading day)",
     )
     p_im.add_argument(
-        "--end", default=None, metavar="YYYYMMDD", help="End date (default: today)"
+        "--end",
+        default=None,
+        metavar="YYYYMMDD",
+        help="End date (default: current trading day)",
     )
     p_im.add_argument(
         "--frequency",

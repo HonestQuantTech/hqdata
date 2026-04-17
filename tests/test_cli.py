@@ -84,9 +84,7 @@ MINUTE_BAR_DF = pd.DataFrame(
     }
 )
 
-CALENDAR_DF = pd.DataFrame(
-    {"date": ["20260101", "20260102"], "is_open": [False, True]}
-)
+CALENDAR_DF = pd.DataFrame({"date": ["20260101", "20260102"], "is_open": [False, True]})
 
 
 # ---------------------------------------------------------------------------
@@ -170,9 +168,7 @@ class TestMainSourceValidation:
                 main()
 
     def test_partial_invalid_source_exits(self):
-        with patch(
-            "sys.argv", ["hqdata", "--source", "tushare,badone", "stock-list"]
-        ):
+        with patch("sys.argv", ["hqdata", "--source", "tushare,badone", "stock-list"]):
             with pytest.raises(SystemExit):
                 main()
 
@@ -187,9 +183,7 @@ class TestFetchStockDaily:
         args = argparse.Namespace(start="20260101", end="20260103")
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_stock_daily_bar", return_value=DAILY_BAR_DF
-            ),
+            patch("hqdata.cli.hqdata.get_stock_daily_bar", return_value=DAILY_BAR_DF),
         ):
             fetch_stock_daily("tushare", args, tmp_path)
 
@@ -199,7 +193,7 @@ class TestFetchStockDaily:
         assert "symbol" in df.columns
         assert df["symbol"].iloc[0] == "600000.SH"
 
-    def test_one_call_per_symbol(self, tmp_path):
+    def test_single_batch_call(self, tmp_path):
         args = argparse.Namespace(start="20260101", end="20260103")
         mock_bar = MagicMock(return_value=DAILY_BAR_DF)
         with (
@@ -208,13 +202,26 @@ class TestFetchStockDaily:
         ):
             fetch_stock_daily("tushare", args, tmp_path)
 
-        assert mock_bar.call_count == len(STOCK_LIST_DF)
+        assert mock_bar.call_count == 1
+        called_symbols = mock_bar.call_args[0][0]
+        assert called_symbols == "600000.SH,000001.SZ"
 
     def test_no_data_no_file(self, tmp_path):
         args = argparse.Namespace(start="20260101", end="20260103")
         empty_bar = pd.DataFrame(
-            columns=["symbol", "date", "pre_close", "open", "high", "low", "close",
-                     "volume", "turnover", "change", "pct_change"]
+            columns=[
+                "symbol",
+                "date",
+                "pre_close",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "turnover",
+                "change",
+                "pct_change",
+            ]
         )
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
@@ -225,23 +232,21 @@ class TestFetchStockDaily:
         out_dir = tmp_path / "tushare" / "stock_daily"
         assert not out_dir.exists() or not any(out_dir.iterdir())
 
-    def test_symbol_error_continues(self, tmp_path):
-        """A failing symbol should not abort the whole fetch."""
+    def test_batch_error_no_crash(self, tmp_path):
+        """A batch call failure should not crash, and no file should be written."""
         args = argparse.Namespace(start="20260101", end="20260103")
-
-        def side_effect(symbol, **kwargs):
-            if symbol == "000001.SZ":
-                raise RuntimeError("API error")
-            return DAILY_BAR_DF
 
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_stock_daily_bar", side_effect=side_effect),
+            patch(
+                "hqdata.cli.hqdata.get_stock_daily_bar",
+                side_effect=RuntimeError("API error"),
+            ),
         ):
             fetch_stock_daily("tushare", args, tmp_path)
 
-        out_file = tmp_path / "tushare" / "stock_daily" / "20260102.csv"
-        assert out_file.exists()
+        out_dir = tmp_path / "tushare" / "stock_daily"
+        assert not out_dir.exists() or not any(out_dir.iterdir())
 
 
 # ---------------------------------------------------------------------------
@@ -254,9 +259,7 @@ class TestFetchStockMinute:
         args = argparse.Namespace(start="20260101", end="20260103", frequency="5m")
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_stock_minute_bar", return_value=MINUTE_BAR_DF
-            ),
+            patch("hqdata.cli.hqdata.get_stock_minute_bar", return_value=MINUTE_BAR_DF),
         ):
             fetch_stock_minute("tushare", args, tmp_path)
 
@@ -286,9 +289,7 @@ class TestFetchIndexDaily:
         args = argparse.Namespace(start="20260101", end="20260103")
         with (
             patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_index_daily_bar", return_value=DAILY_BAR_DF
-            ),
+            patch("hqdata.cli.hqdata.get_index_daily_bar", return_value=DAILY_BAR_DF),
         ):
             fetch_index_daily("tushare", args, tmp_path)
 
@@ -301,9 +302,7 @@ class TestFetchIndexMinute:
         args = argparse.Namespace(start="20260101", end="20260103", frequency="1m")
         with (
             patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_index_minute_bar", return_value=MINUTE_BAR_DF
-            ),
+            patch("hqdata.cli.hqdata.get_index_minute_bar", return_value=MINUTE_BAR_DF),
         ):
             fetch_index_minute("tushare", args, tmp_path)
 
@@ -321,9 +320,7 @@ class TestFetchStockList:
         args = argparse.Namespace()
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"
-            ),
+            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
         ):
             fetch_stock_list("tushare", args, tmp_path)
 
@@ -336,9 +333,7 @@ class TestFetchStockList:
         args = argparse.Namespace()
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"
-            ),
+            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
         ):
             fetch_stock_list("tushare", args, tmp_path)
 
@@ -352,9 +347,7 @@ class TestFetchIndexList:
         args = argparse.Namespace(market="SSE,SZSE")
         with (
             patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"
-            ),
+            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
         ):
             fetch_index_list("tushare", args, tmp_path)
 
@@ -372,9 +365,7 @@ class TestFetchIndexList:
         mock_list = MagicMock(return_value=INDEX_LIST_DF)
         with (
             patch("hqdata.cli.hqdata.get_index_list", mock_list),
-            patch(
-                "hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"
-            ),
+            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
         ):
             fetch_index_list("tushare", args, tmp_path)
 
@@ -417,13 +408,18 @@ class TestMain:
         with (
             patch(
                 "sys.argv",
-                ["hqdata", "--source", "tushare", "--output", str(tmp_path), "stock-list"],
+                [
+                    "hqdata",
+                    "--source",
+                    "tushare",
+                    "--output",
+                    str(tmp_path),
+                    "stock-list",
+                ],
             ),
             patch("hqdata.cli.hqdata.init_source"),
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"
-            ),
+            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
         ):
             main()
 
@@ -435,16 +431,16 @@ class TestMain:
                 "sys.argv",
                 [
                     "hqdata",
-                    "--source", "tushare,ricequant",
-                    "--output", str(tmp_path),
+                    "--source",
+                    "tushare,ricequant",
+                    "--output",
+                    str(tmp_path),
                     "stock-list",
                 ],
             ),
             patch("hqdata.cli.hqdata.init_source") as mock_init,
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"
-            ),
+            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
         ):
             main()
 
@@ -462,9 +458,7 @@ class TestMain:
             ),
             patch("hqdata.cli.hqdata.init_source"),
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch(
-                "hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"
-            ),
+            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
             patch("hqdata.cli._write_csv") as mock_write,
         ):
             main()
