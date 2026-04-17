@@ -124,7 +124,8 @@ def get_stock_list(
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    return _source.get_stock_list(symbol=symbol, exchange=exchange, board=board)
+    trade_date = get_current_trading_day()
+    return _source.get_stock_list(symbol=symbol, exchange=exchange, board=board, trade_date=trade_date)
 
 
 def get_stock_snapshot(symbol: str) -> pd.DataFrame:
@@ -205,7 +206,8 @@ def get_index_list(
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    return _source.get_index_list(symbol, market)
+    trade_date = get_current_trading_day()
+    return _source.get_index_list(symbol, market, trade_date)
 
 
 def get_index_minute_bar(

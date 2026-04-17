@@ -182,6 +182,7 @@ class BaseSource(ABC):
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         board: Optional[str] = None,
+        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
@@ -254,6 +255,7 @@ class BaseSource(ABC):
         self,
         symbol: Optional[str] = None,
         market: Optional[str] = None,
+        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.
 

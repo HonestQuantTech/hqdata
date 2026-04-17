@@ -1,7 +1,6 @@
 """Tushare data source adapter"""
 
 import time
-from datetime import date
 from collections import deque
 from typing import Optional
 import pandas as pd
@@ -181,6 +180,7 @@ class TushareSource(BaseSource):
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         board: Optional[str] = None,
+        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
@@ -216,7 +216,7 @@ class TushareSource(BaseSource):
         if df is None or df.empty:
             return self._empty_stock_list()
         df = self._rename_columns(df).sort_values("symbol")
-        df["date"] = date.today().strftime("%Y%m%d")
+        df["date"] = trade_date
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
         df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
@@ -428,6 +428,7 @@ class TushareSource(BaseSource):
         self,
         symbol: Optional[str] = None,
         market: Optional[str] = None,
+        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.
 
@@ -466,7 +467,7 @@ class TushareSource(BaseSource):
         if df is None or df.empty:
             return self._empty_index_list()
         df = self._rename_columns(df).sort_values("symbol")
-        df["date"] = date.today().strftime("%Y%m%d")
+        df["date"] = trade_date
         cols = [
             "symbol",
             "date",

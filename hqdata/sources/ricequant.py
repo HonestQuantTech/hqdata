@@ -208,6 +208,7 @@ class RicequantSource(BaseSource):
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         board: Optional[str] = None,
+        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
@@ -224,7 +225,7 @@ class RicequantSource(BaseSource):
             curr_type, list_date, delist_date, is_hs
         """
         rq = _get_rqdatac()
-        df = rq.all_instruments(type="CS", date=date.today())
+        df = rq.all_instruments(type="CS", date=trade_date)
 
         if df is None or df.empty:
             return self._empty_stock_list()
@@ -261,7 +262,7 @@ class RicequantSource(BaseSource):
         result = pd.DataFrame(
             {
                 "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
-                "date": date.today().strftime("%Y%m%d"),
+                "date": trade_date,
                 "name": df["symbol"].tolist(),
                 "exchange": df["exchange"].map(self._REVERSE_EXCHANGE_MAP).tolist(),
                 "board": df["board_type"].map(self._REVERSE_BOARD_MAP).tolist(),
@@ -438,6 +439,7 @@ class RicequantSource(BaseSource):
         self,
         symbol: Optional[str] = None,
         market: Optional[str] = None,
+        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.
 
@@ -456,7 +458,7 @@ class RicequantSource(BaseSource):
         use_market = market and market.strip() if not use_symbol else None
 
         rq = _get_rqdatac()
-        df = rq.all_instruments(type="INDX", date=date.today())
+        df = rq.all_instruments(type="INDX", date=trade_date)
 
         if df is None or df.empty:
             return self._empty_index_list()
@@ -483,7 +485,7 @@ class RicequantSource(BaseSource):
         result = pd.DataFrame(
             {
                 "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
-                "date": date.today().strftime("%Y%m%d"),
+                "date": trade_date,
                 "name": df["symbol"].tolist(),
                 "fullname": df[
                     "symbol"
