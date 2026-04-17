@@ -256,7 +256,7 @@ class TestFetchStockDaily:
 
 class TestFetchStockMinute:
     def test_writes_csv_per_date(self, tmp_path):
-        args = argparse.Namespace(start="20260101", end="20260103", frequency="5m")
+        args = argparse.Namespace(start="20260401", end="20260407", frequency="5m")
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
             patch("hqdata.cli.hqdata.get_stock_minute_bar", return_value=MINUTE_BAR_DF),
@@ -267,7 +267,7 @@ class TestFetchStockMinute:
         assert out_file.exists()
 
     def test_frequency_passed(self, tmp_path):
-        args = argparse.Namespace(start="20260101", end="20260101", frequency="15m")
+        args = argparse.Namespace(start="20260401", end="20260407", frequency="15m")
         mock_bar = MagicMock(return_value=MINUTE_BAR_DF)
         with (
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
@@ -299,7 +299,7 @@ class TestFetchIndexDaily:
 
 class TestFetchIndexMinute:
     def test_writes_csv_per_date(self, tmp_path):
-        args = argparse.Namespace(start="20260101", end="20260103", frequency="1m")
+        args = argparse.Namespace(start="20260401", end="20260407", frequency="1m")
         with (
             patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF),
             patch("hqdata.cli.hqdata.get_index_minute_bar", return_value=MINUTE_BAR_DF),

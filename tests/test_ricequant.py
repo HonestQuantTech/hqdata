@@ -235,7 +235,7 @@ class TestRicequantIntegration:
         }
 
         for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_stock_minute_bar(symbol, "1m", "20260401", "20260401")
+            df = self.source.get_stock_minute_bar(symbol, "1m", "20260401", "20260407")
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(
                 df.columns
@@ -468,7 +468,7 @@ class TestRicequantIntegration:
             "turnover",
         }
 
-        df = self.source.get_index_minute_bar("000300.SH", "1m", "20260401", "20260401")
+        df = self.source.get_index_minute_bar("000300.SH", "1m", "20260401", "20260407")
         assert not df.empty, "000300.SH returned empty DataFrame"
         assert expected_columns.issubset(
             df.columns
@@ -494,7 +494,7 @@ class TestRicequantIntegration:
         }
 
         symbols = "000300.SH,000905.SH"
-        df = self.source.get_index_minute_bar(symbols, "1m", "20260401", "20260401")
+        df = self.source.get_index_minute_bar(symbols, "1m", "20260401", "20260407")
         assert not df.empty, f"{symbols} returned empty DataFrame"
         assert expected_columns.issubset(
             df.columns

@@ -88,7 +88,7 @@ hqdata.get_stock_list(board="MB", exchange="SSE") # 多参数时取交集
 hqdata.get_stock_snapshot("000001.SZ,600000.SH")
 
 # 查询股票分钟线数据
-hqdata.get_stock_minute_bar("000001.SZ,600000.SH", frequency="1m", start_date="20260401", end_date="20260401")
+hqdata.get_stock_minute_bar("000001.SZ,600000.SH", frequency="1m", start_date="20260401", end_date="20260407")
 
 # 查询股票日线数据
 hqdata.get_stock_daily_bar("000001.SZ,600000.SH", start_date="20260101", end_date="20260401")
@@ -100,7 +100,7 @@ hqdata.get_index_list(market="SSE,SZSE") # 按市场筛选
 hqdata.get_index_list(symbol="000300.SH", market="SZSE") # 同时传入symbol和market时，只有symbol生效
 
 # 查询指数分钟线数据
-hqdata.get_index_minute_bar("000300.SH,000905.SH", frequency="1m", start_date="20260401", end_date="20260401")
+hqdata.get_index_minute_bar("000300.SH,000905.SH", frequency="1m", start_date="20260401", end_date="20260407")
 
 # 查询指数日线数据
 hqdata.get_index_daily_bar("000300.SH,000905.SH", start_date="20260101", end_date="20260401")
@@ -126,16 +126,16 @@ hqdata [--source SOURCE] [--output DIR] COMMAND [options]
 
 ```bash
 # 股票日线（按日期分文件）
-hqdata stock-daily --start 20260101 --end 20261231
+hqdata stock-daily --start 20260101 --end 20260401
 
 # 股票分钟线（支持 --frequency 1m/5m/15m/30m/60m，默认 1m）
-hqdata stock-minute --start 20260101 --end 20260103 --frequency 5m
+hqdata stock-minute --start 20260401 --end 20260407
 
 # 指数日线
-hqdata index-daily --start 20260101 --end 20261231
+hqdata index-daily --start 20260101 --end 20260401
 
-# 指数分钟线
-hqdata index-minute --start 20260101 --end 20260103 --frequency 15m
+# 指数分钟线（支持 --frequency 1m/5m/15m/30m/60m，默认 1m）
+hqdata index-minute --start 20260401 --end 20260407
 
 # 当日股票列表（存为 {today}.csv）
 hqdata stock-list
@@ -144,7 +144,7 @@ hqdata stock-list
 hqdata index-list [--market SSE,SZSE]
 
 # 交易日历（start/end 为必填）
-hqdata calendar --start 20200101 --end 20251231
+hqdata calendar --start 20160101 --end 20261231
 ```
 
 ### 多源示例
@@ -154,7 +154,7 @@ hqdata calendar --start 20200101 --end 20251231
 hqdata --source tushare,ricequant stock-daily --start 20260101 --end 20260110
 
 # 指定输出目录
-hqdata --source ricequant --output /data/market stock-minute --start 20260101 --end 20260103 --frequency 5m
+hqdata --source ricequant --output /data/market stock-minute --start 20260401 --end 20260407
 ```
 
 > **说明**：日线/分钟线数据会先通过 `get_stock_list()`/`get_index_list()` 获取当日标的列表，再逐一查询每个 symbol 的行情数据，最终按日期合并写入 CSV。
