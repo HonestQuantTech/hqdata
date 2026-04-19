@@ -106,6 +106,21 @@ def previous_trading_day(d: str) -> str:
     return _calendar.previous_trading_day(d)
 
 
+def count_trading_days(start_date: str, end_date: str) -> int:
+    """Return the number of trading days in [start_date, end_date] inclusive.
+
+    Args:
+        start_date: see README
+        end_date: see README
+
+    Returns:
+        Number of trading days (0 if start_date > end_date)
+    """
+    if _calendar is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    return _calendar.count_trading_days(start_date, end_date)
+
+
 def get_stock_list(
     symbol: Optional[str] = None,
     exchange: Optional[str] = None,
@@ -165,7 +180,8 @@ def get_stock_minute_bar(
     today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
-    return _source.get_stock_minute_bar(symbol, frequency, start_date, end_date)
+    trading_days = count_trading_days(start_date, end_date)
+    return _source.get_stock_minute_bar(symbol, frequency, start_date, end_date, trading_days)
 
 
 def get_stock_daily_bar(
@@ -193,13 +209,13 @@ def get_stock_daily_bar(
 
 def get_index_list(
     symbol: Optional[str] = None,
-    market: Optional[str] = None,
+    market: Optional[str] = "SSE,SZSE",
 ) -> pd.DataFrame:
     """Get basic info about an index or the index info of a market.
 
     Args:
         symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-        market: see README, supports comma-separated multiple markets.
+        market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
 
     Returns:
         DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
@@ -232,7 +248,8 @@ def get_index_minute_bar(
     today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
-    return _source.get_index_minute_bar(symbol, frequency, start_date, end_date)
+    trading_days = count_trading_days(start_date, end_date)
+    return _source.get_index_minute_bar(symbol, frequency, start_date, end_date, trading_days)
 
 
 def get_index_daily_bar(

@@ -190,6 +190,7 @@ class BaseSource(ABC):
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             board: see README, supports comma-separated multiple codes
+            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:
             DataFrame with columns: symbol, date, name, exchange, board, industry,
@@ -217,6 +218,7 @@ class BaseSource(ABC):
         frequency: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get minute bar data for stocks.
 
@@ -225,6 +227,7 @@ class BaseSource(ABC):
             frequency: one of "1m", "5m", "15m", "30m", "60m"
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
@@ -254,14 +257,15 @@ class BaseSource(ABC):
     def get_index_list(
         self,
         symbol: Optional[str] = None,
-        market: Optional[str] = None,
+        market: Optional[str] = "SSE,SZSE",
         trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.
 
         Args:
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets.
+            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
+            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:
             DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
@@ -275,6 +279,7 @@ class BaseSource(ABC):
         frequency: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get minute bar data for an index.
 
@@ -283,6 +288,7 @@ class BaseSource(ABC):
             frequency: one of "1m", "5m", "15m", "30m", "60m"
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets

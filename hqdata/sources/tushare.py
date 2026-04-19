@@ -191,6 +191,7 @@ class TushareSource(BaseSource):
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             board: see README, supports comma-separated multiple codes
+            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:
             DataFrame with columns: symbol, date, name, exchange, board, industry,
@@ -352,6 +353,7 @@ class TushareSource(BaseSource):
         frequency: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get minute bar data for stocks.
 
@@ -360,6 +362,7 @@ class TushareSource(BaseSource):
             frequency: one of "1m", "5m", "15m", "30m", "60m"
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
@@ -381,14 +384,36 @@ class TushareSource(BaseSource):
         )
 
         symbols = [s.strip() for s in symbol.split(",")]
+
+        # stk_mins API returns at most 8000 rows per call.
+        # trading_days is provided by the api layer (accurate count via TradingCalendar).
+        #   bars_per_day = 4 h × 60 min / freq_minutes  (A-share trading hours)
+        #   chunk_size   = floor(7900 / (trading_days × bars_per_day)), at least 1
+        if trading_days is None:
+            return self._empty_stock_minute_bar()
+
+        if trading_days == 0:
+            return self._empty_stock_minute_bar()
+
+        freq_minutes = int(frequency[:-1])
+        bars_per_day = (4 * 60) // freq_minutes
+        chunk_size = max(1, 7900 // (trading_days * bars_per_day))
+
         dfs = []
-        for s in symbols:
+        for chunk in [symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)]:
             self._rate_limiter.acquire()
             d = self.pro.stk_mins(
-                ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt
+                ts_code=",".join(chunk), freq=freq, start_date=start_dt, end_date=end_dt
             )
-            if d is not None and not d.empty:
-                dfs.append(d)
+            if d is None or d.empty:
+                continue
+            if len(d) >= 8000:
+                print(
+                    f"[hqdata][tushare] stk_mins returned {len(d)} rows which meets or exceeds "
+                    "the 8000-row API limit — data may be truncated. Returning empty DataFrame."
+                )
+                return self._empty_stock_minute_bar()
+            dfs.append(d)
         df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:
@@ -435,14 +460,15 @@ class TushareSource(BaseSource):
     def get_index_list(
         self,
         symbol: Optional[str] = None,
-        market: Optional[str] = None,
+        market: Optional[str] = "SSE,SZSE",
         trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.
 
         Args:
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets.
+            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
+            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:
             DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
@@ -502,6 +528,7 @@ class TushareSource(BaseSource):
         frequency: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get minute bar data for an index.
 
@@ -510,6 +537,7 @@ class TushareSource(BaseSource):
             frequency: one of "1m", "5m", "15m", "30m", "60m"
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
@@ -531,14 +559,34 @@ class TushareSource(BaseSource):
         )
 
         symbols = [s.strip() for s in symbol.split(",")]
+
+        # idx_mins API returns at most 8000 rows per call.
+        # Same batching strategy as get_stock_minute_bar.
+        if trading_days is None:
+            return self._empty_index_minute_bar()
+
+        if trading_days == 0:
+            return self._empty_index_minute_bar()
+
+        freq_minutes = int(frequency[:-1])
+        bars_per_day = (4 * 60) // freq_minutes
+        chunk_size = max(1, 7900 // (trading_days * bars_per_day))
+
         dfs = []
-        for s in symbols:
+        for chunk in [symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)]:
             self._rate_limiter.acquire()
             d = self.pro.idx_mins(
-                ts_code=s, freq=freq, start_date=start_dt, end_date=end_dt
+                ts_code=",".join(chunk), freq=freq, start_date=start_dt, end_date=end_dt
             )
-            if d is not None and not d.empty:
-                dfs.append(d)
+            if d is None or d.empty:
+                continue
+            if len(d) >= 8000:
+                print(
+                    f"[hqdata][tushare] idx_mins returned {len(d)} rows which meets or exceeds "
+                    "the 8000-row API limit — data may be truncated. Returning empty DataFrame."
+                )
+                return self._empty_index_minute_bar()
+            dfs.append(d)
         df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:

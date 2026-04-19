@@ -75,3 +75,13 @@ class TradingCalendar:
             self._sorted_days = sorted(self._trading_days)
             idx = bisect.bisect_left(self._sorted_days, d) - 1
         return self._sorted_days[idx]
+
+    def count_trading_days(self, start_date: str, end_date: str) -> int:
+        """Return the number of trading days in [start_date, end_date] inclusive."""
+        if start_date > end_date:
+            return 0
+        self._ensure_range(start_date)
+        self._ensure_range(end_date)
+        lo = bisect.bisect_left(self._sorted_days, start_date)
+        hi = bisect.bisect_right(self._sorted_days, end_date)
+        return hi - lo
