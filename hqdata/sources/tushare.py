@@ -204,6 +204,8 @@ class TushareSource(BaseSource):
                 market_names.append(self._BOARD_MAP.get(m, m))
             board = ",".join(market_names)
 
+        # stock_basic API returns at most 6000 rows per call.
+        # If the result hits this limit, data is likely truncated — treat as error.
         self._rate_limiter.acquire()
         df = self.pro.stock_basic(
             ts_code=symbol,
@@ -214,6 +216,12 @@ class TushareSource(BaseSource):
         )
 
         if df is None or df.empty:
+            return self._empty_stock_list()
+        if len(df) >= 6000:
+            print(
+                f"[hqdata][tushare] get_stock_list() returned {len(df)} rows which meets or exceeds "
+                "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
+            )
             return self._empty_stock_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = trade_date
@@ -442,6 +450,8 @@ class TushareSource(BaseSource):
         use_symbol = symbol and symbol.strip()
         use_market = market and market.strip() if not use_symbol else None
 
+        # index_basic API returns at most 8000 rows per call.
+        # If the result hits this limit, data is likely truncated — treat as error.
         if use_symbol:
             symbols = [s.strip() for s in symbol.split(",")]
             dfs = []
@@ -465,6 +475,12 @@ class TushareSource(BaseSource):
             df = self.pro.index_basic(fields=self._INDEX_LIST_FIELDS)
 
         if df is None or df.empty:
+            return self._empty_index_list()
+        if len(df) >= 8000:
+            print(
+                f"[hqdata][tushare] get_index_list() returned {len(df)} rows which meets or exceeds "
+                "the 8000-row API limit — data may be truncated. Returning empty DataFrame."
+            )
             return self._empty_index_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = trade_date
