@@ -204,7 +204,8 @@ def get_stock_daily_bar(
     today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
-    return _source.get_stock_daily_bar(symbol, start_date, end_date)
+    trading_days = count_trading_days(start_date, end_date)
+    return _source.get_stock_daily_bar(symbol, start_date, end_date, trading_days)
 
 
 def get_index_list(
@@ -272,4 +273,5 @@ def get_index_daily_bar(
     today = get_current_trading_day()
     start_date = start_date or today
     end_date = end_date or today
-    return _source.get_index_daily_bar(symbol, start_date, end_date)
+    trading_days = count_trading_days(start_date, end_date)
+    return _source.get_index_daily_bar(symbol, start_date, end_date, trading_days)

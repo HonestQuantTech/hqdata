@@ -233,7 +233,7 @@ class TestTushareIntegration:
         }
 
         for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_stock_daily_bar(symbol, "20260101", "20260401")
+            df = self.source.get_stock_daily_bar(symbol, "20260101", "20260401", trading_days=57)
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(
                 df.columns
@@ -262,7 +262,7 @@ class TestTushareIntegration:
         }
 
         symbols = "000001.SZ,600000.SH"
-        df = self.source.get_stock_daily_bar(symbols, "20260101", "20260401")
+        df = self.source.get_stock_daily_bar(symbols, "20260101", "20260401", trading_days=57)
         assert (
             not df.empty
         ), f"get_stock_daily_bar returned empty DataFrame for {symbols}"
@@ -431,7 +431,7 @@ class TestTushareIntegration:
         }
 
         for symbol in ("000300.SH", "000905.SH", "000852.SH", "932000.CSI"):
-            df = self.source.get_index_daily_bar(symbol, "20260101", "20260401")
+            df = self.source.get_index_daily_bar(symbol, "20260101", "20260401", trading_days=57)
             assert not df.empty, f"{symbol} returned empty DataFrame"
             assert expected_columns.issubset(
                 df.columns
@@ -459,7 +459,7 @@ class TestTushareIntegration:
         }
 
         symbols = "000300.SH,000905.SH"
-        df = self.source.get_index_daily_bar(symbols, "20260101", "20260401")
+        df = self.source.get_index_daily_bar(symbols, "20260101", "20260401", trading_days=57)
         assert not df.empty, f"{symbols} returned empty DataFrame"
         assert expected_columns.issubset(
             df.columns

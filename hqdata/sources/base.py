@@ -240,6 +240,7 @@ class BaseSource(ABC):
         symbol: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get daily bar data for stocks.
 
@@ -247,6 +248,7 @@ class BaseSource(ABC):
             symbol: see README, supports comma-separated multiple codes
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
@@ -301,6 +303,7 @@ class BaseSource(ABC):
         symbol: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get daily bar data for an index.
 
@@ -308,6 +311,7 @@ class BaseSource(ABC):
             symbol: see README, supports comma-separated multiple codes
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change

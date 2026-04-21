@@ -425,6 +425,7 @@ class TushareSource(BaseSource):
         symbol: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get daily bar data for stocks.
 
@@ -432,12 +433,38 @@ class TushareSource(BaseSource):
             symbol: see README, supports comma-separated multiple codes
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
-        self._rate_limiter.acquire()
-        df = self.pro.daily(ts_code=symbol, start_date=start_date, end_date=end_date)
+        if trading_days is None:
+            return self._empty_stock_daily_bar()
+        if trading_days == 0:
+            return self._empty_stock_daily_bar()
+
+        symbols = [s.strip() for s in symbol.split(",")]
+
+        # daily API returns at most 6000 rows per call.
+        # chunk_size = floor(5900 / trading_days), at least 1
+        chunk_size = max(1, 5900 // trading_days)
+
+        dfs = []
+        for chunk in [symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)]:
+            self._rate_limiter.acquire()
+            d = self.pro.daily(
+                ts_code=",".join(chunk), start_date=start_date, end_date=end_date
+            )
+            if d is None or d.empty:
+                continue
+            if len(d) >= 6000:
+                print(
+                    f"[hqdata][tushare] daily returned {len(d)} rows which meets or exceeds "
+                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
+                )
+                return self._empty_stock_daily_bar()
+            dfs.append(d)
+        df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:
             return self._empty_stock_daily_bar()
@@ -598,6 +625,7 @@ class TushareSource(BaseSource):
         symbol: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get daily bar data for an index.
 
@@ -605,19 +633,34 @@ class TushareSource(BaseSource):
             symbol: see README, supports comma-separated multiple codes
             start_date: see README
             end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
 
         Returns:
             DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
+        if trading_days is None:
+            return self._empty_index_daily_bar()
+        if trading_days == 0:
+            return self._empty_index_daily_bar()
+
         symbols = [s.strip() for s in symbol.split(",")]
+
+        # index_daily API only accepts a single ts_code per call (unlike daily).
+        # Iterate symbol by symbol; each call returns at most trading_days rows,
+        # so the 8000-row limit is only a concern for very long date ranges.
         dfs = []
         for s in symbols:
             self._rate_limiter.acquire()
-            d = self.pro.index_daily(
-                ts_code=s, start_date=start_date, end_date=end_date
-            )
-            if d is not None and not d.empty:
-                dfs.append(d)
+            d = self.pro.index_daily(ts_code=s, start_date=start_date, end_date=end_date)
+            if d is None or d.empty:
+                continue
+            if len(d) >= 8000:
+                print(
+                    f"[hqdata][tushare] index_daily returned {len(d)} rows which meets or exceeds "
+                    "the 8000-row API limit — data may be truncated. Returning empty DataFrame."
+                )
+                return self._empty_index_daily_bar()
+            dfs.append(d)
         df = pd.concat(dfs, ignore_index=True) if dfs else None
 
         if df is None or df.empty:
