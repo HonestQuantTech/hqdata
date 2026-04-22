@@ -1,6 +1,7 @@
 """Ricequant (米筐) data source adapter"""
 
 import os
+import warnings
 from datetime import date, datetime, timedelta
 from typing import Optional
 import pandas as pd
@@ -533,14 +534,21 @@ class RicequantSource(BaseSource):
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
         if isinstance(rq_symbols, str):
             rq_symbols = [rq_symbols]
-        df = rq.get_price(
-            rq_symbols,
-            start_date=start_date,
-            end_date=end_date,
-            frequency=self._MINUTE_FREQ_MAP[frequency],
-            adjust_type="none",
-            expect_df=True,
-        )
+        rq_symbols = [s for s in rq_symbols if s is not None]
+        if not rq_symbols:
+            return self._empty_index_minute_bar()
+        # 某些指数（如 SSE180.XSHG、SSE50.XSHG）在 rqdatac 内部 validator 会触发
+        # UserWarning: invalid order_book_id，但实际查询正常。此处精准屏蔽该警告。
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
+            df = rq.get_price(
+                rq_symbols,
+                start_date=start_date,
+                end_date=end_date,
+                frequency=self._MINUTE_FREQ_MAP[frequency],
+                adjust_type="none",
+                expect_df=True,
+            )
         if df is None or df.empty:
             return self._empty_index_minute_bar()
         return self._normalize_minute_bar(df, rq)
@@ -567,14 +575,21 @@ class RicequantSource(BaseSource):
         rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
         if isinstance(rq_symbols, str):
             rq_symbols = [rq_symbols]
-        df = rq.get_price(
-            rq_symbols,
-            start_date=start_date,
-            end_date=end_date,
-            frequency="1d",
-            adjust_type="none",
-            expect_df=True,
-        )
+        rq_symbols = [s for s in rq_symbols if s is not None]
+        if not rq_symbols:
+            return self._empty_index_daily_bar()
+        # 某些指数（如 SSE180.XSHG、SSE50.XSHG）在 rqdatac 内部 validator 会触发
+        # UserWarning: invalid order_book_id，但实际查询正常。此处精准屏蔽该警告。
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
+            df = rq.get_price(
+                rq_symbols,
+                start_date=start_date,
+                end_date=end_date,
+                frequency="1d",
+                adjust_type="none",
+                expect_df=True,
+            )
         if df is None or df.empty:
             return self._empty_index_daily_bar()
         return self._normalize_daily_bar(df, rq)
