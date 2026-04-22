@@ -1,11 +1,9 @@
 """Tushare data source adapter"""
 
-import sys
 import time
 from collections import deque
 from typing import Optional
 import pandas as pd
-from tqdm import tqdm
 
 from hqdata.sources.base import BaseSource
 
@@ -363,7 +361,7 @@ class TushareSource(BaseSource):
 
         chunks = [symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)]
         dfs = []
-        for chunk in tqdm(chunks, desc="stock-daily", unit="batch", file=sys.stderr, disable=not sys.stderr.isatty()):
+        for chunk in chunks:
             self._rate_limiter.acquire()
             d = self.pro.daily(
                 ts_code=",".join(chunk), start_date=start_date, end_date=end_date
@@ -516,7 +514,7 @@ class TushareSource(BaseSource):
         # Iterate symbol by symbol; each call returns at most trading_days rows,
         # so the 8000-row limit is only a concern for very long date ranges.
         dfs = []
-        for s in tqdm(symbols, desc="index-daily", unit="symbol", file=sys.stderr, disable=not sys.stderr.isatty()):
+        for s in symbols:
             self._rate_limiter.acquire()
             d = self.pro.index_daily(ts_code=s, start_date=start_date, end_date=end_date)
             if d is None or d.empty:
