@@ -11,8 +11,12 @@ from hqdata.sources.base import BaseSource
 
 def _get_rqdatac():
     """Lazy import rqdatac to support optional installation."""
-    import rqdatac as rq
-
+    try:
+        import rqdatac as rq
+    except ImportError:
+        raise ImportError(
+            "rqdatac 未安装，hqdata不会默认安装您不一定需要的依赖。请运行：pip install hqdata[ricequant]开启对ricequant的支持。"
+        ) from None
     return rq
 
 

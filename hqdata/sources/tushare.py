@@ -10,8 +10,12 @@ from hqdata.sources.base import BaseSource
 
 def _get_tushare():
     """Lazy import tushare to support optional installation."""
-    import tushare as ts
-
+    try:
+        import tushare as ts
+    except ImportError:
+        raise ImportError(
+            "tushare 未安装，hqdata不会默认安装您不一定需要的依赖。请运行：pip install hqdata[tushare]开启对tushare的支持。"
+        ) from None
     return ts
 
 
