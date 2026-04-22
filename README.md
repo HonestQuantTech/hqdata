@@ -52,9 +52,6 @@ pip install hqdata
 pip install hqdata[tushare]      # tushare 支持
 pip install hqdata[ricequant]    # ricequant 支持
 pip install hqdata[tushare,ricequant]  # 同时安装两者
-
-# 复制模板并自行填入所需字段
-cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/包安装目录
 ```
 
 ### 方式二：本地开发
@@ -66,9 +63,26 @@ source .venv/bin/activate
 
 # 安装依赖 (editable 模式，改代码直接生效)
 pip install -e .
+```
 
-# 复制模板并自行填入所需字段
-cp .env.example .env # 放在你运行 Python 代码的当前目录（优先）/包安装目录
+## 配置数据源
+
+凭证支持两种配置方式，本质相同（最终都写入 `os.environ`）：
+
+### 方式一：系统环境变量
+
+直接在 shell 中导出，或写入 `~/.bashrc` / `~/.zshrc`：
+
+```bash
+export TUSHARE_TOKEN=your_token # tushare
+```
+
+### 方式二：`.env` 文件
+
+复制示例文件并填入凭证，`import hqdata` 时会自动加载：
+
+```bash
+cp .env.example .env   # 放在运行 Python 的当前目录（优先）或包安装目录
 ```
 
 ## 使用
