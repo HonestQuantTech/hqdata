@@ -120,13 +120,13 @@ class TestRicequantIntegration:
 
     def test_get_stock_list_by_multiple_exchanges(self):
         """Test get_stock_list with comma-separated multiple exchanges."""
-        df = self.source.get_stock_list(exchange="SSE,SZSE")
+        df = self.source.get_stock_list(exchange="SSE,SZE")
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for multiple exchanges"
         has_sse = df["exchange"].str.contains("SSE").any()
-        has_szse = df["exchange"].str.contains("SZSE").any()
-        assert has_sse and has_szse, "Expected both SSE and SZSE in results"
+        has_sze = df["exchange"].str.contains("SZE").any()
+        assert has_sse and has_sze, "Expected both SSE and SZE in results"
 
     def test_get_stock_list_by_board(self):
         """Test get_stock_list with single board filter (MB)."""
@@ -155,16 +155,16 @@ class TestRicequantIntegration:
         assert df2["board"].str.contains("MB").all()
         assert df2["exchange"].str.contains("SSE").all()
 
-        # Three params: symbol + board + exchange (all compatible: 000001.SZ is MB on SZSE)
+        # Three params: symbol + board + exchange (all compatible: 000001.SZ is MB on SZE)
         df3 = self.source.get_stock_list(
-            symbol="000001.SZ", board="MB", exchange="SZSE"
+            symbol="000001.SZ", board="MB", exchange="SZE"
         )
         assert (
             not df3.empty
         ), "get_stock_list returned empty DataFrame for symbol+board+exchange"
         assert "000001.SZ" in df3["symbol"].values
         assert df3["board"].str.contains("MB").all()
-        assert df3["exchange"].str.contains("SZSE").all()
+        assert df3["exchange"].str.contains("SZE").all()
 
     def test_get_stock_snapshot(self):
         """Test get_stock_snapshot returns well-formed data for both markets."""

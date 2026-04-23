@@ -29,8 +29,11 @@ class RicequantSource(BaseSource):
     - Username/password: Set username/password parameters or RQDATA_USERNAME/RQDATA_PASSWORD env vars
     """
 
-    _EXCHANGE_MAP = {"SSE": "XSHG", "SZSE": "XSHE", "BJSE": "BJSE"}
+    _EXCHANGE_MAP = {"SSE": "XSHG", "SZE": "XSHE", "BSE": "BJSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
+
+    _MARKET_MAP = {"SSE": "XSHG", "SZSE": "XSHE", "BJSE": "BJSE"}
+    _REVERSE_MARKET_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
     _BOARD_MAP = {
         "MB": "MainBoard",
@@ -483,9 +486,9 @@ class RicequantSource(BaseSource):
             df = df[df["order_book_id"].isin(rq_symbols)].reset_index(drop=True)
         elif use_market:
             rq_exchanges = [
-                self._EXCHANGE_MAP[m.strip()]
+                self._MARKET_MAP[m.strip()]
                 for m in market.split(",")
-                if m.strip() in self._EXCHANGE_MAP
+                if m.strip() in self._MARKET_MAP
             ]
             if not rq_exchanges:
                 return self._empty_index_list()
@@ -501,7 +504,7 @@ class RicequantSource(BaseSource):
                 "fullname": df[
                     "symbol"
                 ].tolist(),  # rqdatac does not provide a separate full name
-                "market": df["exchange"].map(self._REVERSE_EXCHANGE_MAP).tolist(),
+                "market": df["exchange"].map(self._REVERSE_MARKET_MAP).tolist(),
                 "base_date": df["base_date"].tolist(),
                 "base_point": df["base_point"].tolist(),
                 "list_date": df["listed_date"].tolist(),

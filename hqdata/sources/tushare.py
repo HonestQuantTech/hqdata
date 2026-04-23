@@ -65,6 +65,9 @@ class TushareSource(BaseSource):
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
+    _EXCHANGE_MAP = {"SSE": "SSE", "SZE": "SZSE", "BSE": "BSE"}
+    _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
+
     _STOCK_LIST_FIELDS = (
         "ts_code,name,industry,market,exchange,curr_type,list_date,delist_date,is_hs"
     )
@@ -163,12 +166,18 @@ class TushareSource(BaseSource):
                 market_names.append(self._BOARD_MAP.get(m, m))
             board = ",".join(market_names)
 
+        # Map exchange to tushare native values (e.g. SZE → SZSE)
+        ts_exchange = None
+        if exchange:
+            ts_exchanges = [self._EXCHANGE_MAP.get(e.strip(), e.strip()) for e in exchange.split(",")]
+            ts_exchange = ",".join(ts_exchanges)
+
         # stock_basic API returns at most 6000 rows per call.
         # If the result hits this limit, data is likely truncated — treat as error.
         self._rate_limiter.acquire()
         df = self.pro.stock_basic(
             ts_code=symbol,
-            exchange=exchange,
+            exchange=ts_exchange,
             market=board,
             list_status="L",
             fields=self._STOCK_LIST_FIELDS,
@@ -184,6 +193,7 @@ class TushareSource(BaseSource):
             return self._empty_stock_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = trade_date
+        df["exchange"] = df["exchange"].map(lambda x: self._REVERSE_EXCHANGE_MAP.get(x, x))
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
         df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
