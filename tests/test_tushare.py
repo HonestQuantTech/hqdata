@@ -355,13 +355,13 @@ class TestTushareIntegration:
             "date",
         }
 
-        markets = "SSE,SZSE"
+        markets = "SSE,SZE"
         df = self.source.get_index_list(market=markets)
         assert not df.empty, f"get_index_list returned empty DataFrame for {markets}"
         assert expected_columns.issubset(
             df.columns
         ), f"Missing columns: {expected_columns - set(df.columns)}"
-        # Result should contain both SSE and SZSE symbols
+        # Result should contain both SSE and SZE symbols
         has_sh = df["symbol"].str.endswith(".SH").any()
         has_sz = df["symbol"].str.endswith(".SZ").any()
         assert (
@@ -382,7 +382,7 @@ class TestTushareIntegration:
         }
 
         # When symbol is provided, market should be ignored
-        df = self.source.get_index_list(symbol="000300.SH", market="SZSE")
+        df = self.source.get_index_list(symbol="000300.SH", market="SZE")
         assert (
             not df.empty
         ), "get_index_list returned empty DataFrame when symbol is provided"

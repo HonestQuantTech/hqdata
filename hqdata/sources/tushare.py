@@ -61,12 +61,15 @@ class TushareSource(BaseSource):
         "MB": "主板",
         "GEM": "创业板",
         "STAR": "科创板",
-        "BJSE": "北交所",
+        "BSE": "北交所",
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
     _EXCHANGE_MAP = {"SSE": "SSE", "SZE": "SZSE", "BSE": "BSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
+
+    _MARKET_MAP = {"SZE": "SZSE"}
+    _REVERSE_MARKET_MAP = {"SZSE": "SZE"}
 
     _STOCK_LIST_FIELDS = (
         "ts_code,name,industry,market,exchange,curr_type,list_date,delist_date,is_hs"
@@ -408,14 +411,14 @@ class TushareSource(BaseSource):
     def get_index_list(
         self,
         symbol: Optional[str] = None,
-        market: Optional[str] = "SSE,SZSE",
+        market: Optional[str] = "SSE,SZE",
         trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.
 
         Args:
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
+            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZE".
             trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:
@@ -439,8 +442,9 @@ class TushareSource(BaseSource):
             markets = [m.strip() for m in market.split(",")]
             dfs = []
             for m in markets:
+                ts_market = self._MARKET_MAP.get(m, m)
                 self._rate_limiter.acquire()
-                df = self.pro.index_basic(market=m, fields=self._INDEX_LIST_FIELDS)
+                df = self.pro.index_basic(market=ts_market, fields=self._INDEX_LIST_FIELDS)
                 if df is not None and not df.empty:
                     dfs.append(df)
             df = pd.concat(dfs, ignore_index=True) if dfs else None
@@ -458,6 +462,7 @@ class TushareSource(BaseSource):
             return self._empty_index_list()
         df = self._rename_columns(df).sort_values("symbol")
         df["date"] = trade_date
+        df["market"] = df["market"].map(lambda x: self._REVERSE_MARKET_MAP.get(x, x))
         cols = [
             "symbol",
             "date",

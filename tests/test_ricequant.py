@@ -353,7 +353,7 @@ class TestRicequantIntegration:
     def test_get_index_list_single_market(self):
         """Test get_index_list with single market.
 
-        Note: rqdatac only supports SSE and SZSE markets;
+        Note: rqdatac only supports SSE and SZE markets;
         CSI, SW, CICC, MSCI, OTH are not supported and return empty — unlike tushare.
         Note: A small number of SSE indexes get a non-.SH suffix after id_convert (e.g. .WI),
         so the .SH check uses .any() instead of .all() — unlike tushare which uses .all().
@@ -384,7 +384,7 @@ class TestRicequantIntegration:
     def test_get_index_list_multiple_markets(self):
         """Test get_index_list with comma-separated multiple markets.
 
-        Note: rqdatac only supports SSE and SZSE; CSI, SW, CICC, MSCI, OTH return empty.
+        Note: rqdatac only supports SSE and SZE; CSI, SW, CICC, MSCI, OTH return empty.
         """
         expected_columns = {
             "symbol",
@@ -397,7 +397,7 @@ class TestRicequantIntegration:
             "date",
         }
 
-        markets = "SSE,SZSE"
+        markets = "SSE,SZE"
         df = self.source.get_index_list(market=markets)
         assert not df.empty, f"get_index_list returned empty DataFrame for {markets}"
         assert expected_columns.issubset(
@@ -422,7 +422,7 @@ class TestRicequantIntegration:
             "date",
         }
 
-        df = self.source.get_index_list(symbol="000300.SH", market="SZSE")
+        df = self.source.get_index_list(symbol="000300.SH", market="SZE")
         assert (
             not df.empty
         ), "get_index_list returned empty DataFrame when symbol is provided"
@@ -508,7 +508,7 @@ class TestRicequantIntegration:
         """Test get_index_daily_bar returns well-formed data for major indexes.
 
         Note: rqdatac does not support CSI-suffixed indexes (e.g. 932000.CSI) via id_convert,
-        so only SSE/SZSE indexes are tested here — unlike tushare which also supports CSI indexes.
+        so only SSE/SZE indexes are tested here — unlike tushare which also supports CSI indexes.
         """
         expected_columns = {
             "symbol",

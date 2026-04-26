@@ -259,7 +259,7 @@ class BaseSource(ABC):
     def get_index_list(
         self,
         symbol: Optional[str] = None,
-        market: Optional[str] = "SSE,SZSE",
+        market: Optional[str] = "SSE,SZE",
         trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.

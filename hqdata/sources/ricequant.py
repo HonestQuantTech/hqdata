@@ -32,14 +32,14 @@ class RicequantSource(BaseSource):
     _EXCHANGE_MAP = {"SSE": "XSHG", "SZE": "XSHE", "BSE": "BJSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
-    _MARKET_MAP = {"SSE": "XSHG", "SZSE": "XSHE", "BJSE": "BJSE"}
-    _REVERSE_MARKET_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
+    _MARKET_MAP = {"SSE": "XSHG", "SZE": "XSHE", "BSE": "BJSE"}
+    _REVERSE_MARKET_MAP = {v: k for k, v in _MARKET_MAP.items()}
 
     _BOARD_MAP = {
         "MB": "MainBoard",
         "GEM": "GEM",
         "STAR": "KSH",
-        "BJSE": "BJS",
+        "BSE": "BJS",
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
@@ -451,18 +451,18 @@ class RicequantSource(BaseSource):
     def get_index_list(
         self,
         symbol: Optional[str] = None,
-        market: Optional[str] = "SSE,SZSE",
+        market: Optional[str] = "SSE,SZE",
         trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info about an index or the index info of a market.
 
         Note:
             - fullname is the same as name (rqdatac does not provide a separate full name).
-            - market filter only supports SSE and SZSE; CSI/SW/CICC/MSCI/OTH return empty DataFrame.
+            - market filter only supports SSE and SZE; CSI/SW/CICC/MSCI/OTH return empty DataFrame.
 
         Args:
             symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
+            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZE".
             trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:

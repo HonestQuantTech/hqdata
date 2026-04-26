@@ -210,7 +210,7 @@ def get_stock_daily_bar(
 
 def get_index_list(
     symbol: Optional[str] = None,
-    market: Optional[str] = "SSE,SZSE",
+    market: Optional[str] = "SSE,SZE",
 ) -> pd.DataFrame:
     """Get basic info about an index or the index info of a market.
 

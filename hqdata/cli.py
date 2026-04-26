@@ -306,9 +306,9 @@ def cmd_stock_daily(obj: dict, start: Optional[str], end: Optional[str]) -> None
 @cli.command("index-list")
 @click.option(
     "--market",
-    default="SSE,SZSE",
+    default="SSE,SZE",
     show_default=True,
-    help="Market filter (e.g. CSI, SSE, SZSE, SW).",
+    help="Market filter (e.g. CSI, SSE, SZE, SW).",
 )
 @click.pass_obj
 def cmd_index_list(obj: dict, market: str) -> None:
