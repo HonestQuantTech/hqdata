@@ -84,8 +84,11 @@ class RicequantSource(BaseSource):
         df = df.rename(
             columns={"total_turnover": "turnover", "prev_close": "pre_close"}
         )
+        if "pre_close" not in df.columns:
+            df["pre_close"] = float("nan")
         df["change"] = (df["close"] - df["pre_close"]).round(4)
-        df["pct_change"] = ((df["change"] / df["pre_close"]) * 100).round(4)
+        pct = (df["change"] / df["pre_close"]) * 100
+        df["pct_change"] = pct.replace([float("inf"), float("-inf")], float("nan")).round(4)
         # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
         if "volume" in df.columns:
             df["volume"] = (df["volume"] / 100).astype("int64")
@@ -545,17 +548,20 @@ class RicequantSource(BaseSource):
         if not rq_symbols:
             return self._empty_index_minute_bar()
         # 某些指数（如 SSE180.XSHG、SSE50.XSHG）在 rqdatac 内部 validator 会触发
-        # UserWarning: invalid order_book_id，但实际查询正常。此处精准屏蔽该警告。
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
-            df = rq.get_price(
-                rq_symbols,
-                start_date=start_date,
-                end_date=end_date,
-                frequency=self._MINUTE_FREQ_MAP[frequency],
-                adjust_type="none",
-                expect_df=True,
-            )
+        # UserWarning 或 Exception（invalid order_book_id）。两种情况均返回空。
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
+                df = rq.get_price(
+                    rq_symbols,
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency=self._MINUTE_FREQ_MAP[frequency],
+                    adjust_type="none",
+                    expect_df=True,
+                )
+        except Exception:
+            return self._empty_index_minute_bar()
         if df is None or df.empty:
             return self._empty_index_minute_bar()
         return self._normalize_minute_bar(df, rq)
@@ -586,17 +592,20 @@ class RicequantSource(BaseSource):
         if not rq_symbols:
             return self._empty_index_daily_bar()
         # 某些指数（如 SSE180.XSHG、SSE50.XSHG）在 rqdatac 内部 validator 会触发
-        # UserWarning: invalid order_book_id，但实际查询正常。此处精准屏蔽该警告。
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
-            df = rq.get_price(
-                rq_symbols,
-                start_date=start_date,
-                end_date=end_date,
-                frequency="1d",
-                adjust_type="none",
-                expect_df=True,
-            )
+        # UserWarning 或 Exception（invalid order_book_id）。两种情况均返回空。
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
+                df = rq.get_price(
+                    rq_symbols,
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency="1d",
+                    adjust_type="none",
+                    expect_df=True,
+                )
+        except Exception:
+            return self._empty_index_daily_bar()
         if df is None or df.empty:
             return self._empty_index_daily_bar()
         return self._normalize_daily_bar(df, rq)
