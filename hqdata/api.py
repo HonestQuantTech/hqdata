@@ -125,6 +125,7 @@ def get_stock_list(
     symbol: Optional[str] = None,
     exchange: Optional[str] = None,
     board: Optional[str] = None,
+    trade_date: Optional[str] = None,
 ) -> pd.DataFrame:
     """Get basic info for stocks.
 
@@ -132,6 +133,7 @@ def get_stock_list(
         symbol: see README, supports comma-separated multiple codes
         exchange: see README, supports comma-separated multiple exchanges
         board: see README, supports comma-separated multiple codes
+        trade_date: snapshot date (YYYYMMDD); defaults to current trading day.
 
     Returns:
         DataFrame with columns: symbol, date, name, exchange, board, industry,
@@ -139,7 +141,8 @@ def get_stock_list(
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    trade_date = get_current_trading_day()
+    if trade_date is None:
+        trade_date = get_current_trading_day()
     return _source.get_stock_list(symbol=symbol, exchange=exchange, board=board, trade_date=trade_date)
 
 

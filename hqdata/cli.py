@@ -233,17 +233,47 @@ def cmd_calendar(obj: dict, start: str, end: str) -> None:
 
 
 @cli.command("stock-list")
+@click.option("--start", default=None, metavar="YYYYMMDD", help="Start date (default: current trading day)")
+@click.option("--end", default=None, metavar="YYYYMMDD", help="End date (default: current trading day)")
 @click.pass_obj
-def cmd_stock_list(obj: dict) -> None:
-    """Fetch today's stock list and save as {today}.csv."""
+def cmd_stock_list(obj: dict, start: Optional[str], end: Optional[str]) -> None:
+    """Fetch stock list for a date range and save one CSV per trading day.
+
+    \b
+    When --start/--end are omitted, only the current trading day is fetched.
+    Note: tushare only supports the current trading day; use ricequant for history.
+    """
 
     def fetch(source: str, output_root: Path) -> None:
-        click.echo(f"[{source}][stock-list] Fetching stock list...")
-        df = hqdata.get_stock_list()
         today = hqdata.get_current_trading_day()
-        out_path = output_root / source / "stock_list" / f"{today}.csv"
-        _write_csv(df, out_path)
-        click.echo(f"[{source}][stock-list] Done. Written to {out_path}")
+        actual_start = start or today
+        actual_end = end or today
+
+        if source == "tushare" and (actual_start != today or actual_end != today):
+            click.echo(
+                f"[{source}][stock-list] ERROR: tushare 历史股票列表查询暂未支持，功能开发中，"
+                "请使用 --source ricequant 获取历史时点列表。",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        calendar_df = hqdata.get_calendar(actual_start, actual_end, is_open=True)
+        trading_days = calendar_df["date"].tolist()
+
+        out_dir = output_root / source / "stock_list"
+        skipped = 0
+        for d in trading_days:
+            out_path = out_dir / f"{d}.csv"
+            if out_path.exists():
+                skipped += 1
+                continue
+            click.echo(f"[{source}][stock-list] Fetching {d}...")
+            df = hqdata.get_stock_list(trade_date=d)
+            _write_csv(df, out_path)
+
+        if skipped:
+            click.echo(f"[{source}][stock-list] Skipped {skipped} already-existing file(s).")
+        click.echo(f"[{source}][stock-list] Done. Written to {out_dir}")
 
     _run_for_sources(obj, fetch)
 
