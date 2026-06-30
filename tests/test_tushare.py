@@ -1,8 +1,9 @@
 """Tests for tushare source"""
 
 import os
+from datetime import date, timedelta
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import pandas as pd
 
 import hqdata.config
@@ -17,6 +18,58 @@ class TestTushareSource:
         with pytest.raises(ValueError, match="TUSHARE_TOKEN"):
             TushareSource(token=None)
 
+    def test_get_stock_list_filters_historical_universe(self):
+        source = object.__new__(TushareSource)
+        source.pro = MagicMock()
+        source.pro.stock_basic.return_value = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ", "000002.SZ", "000003.SZ", "000004.SZ"],
+                "name": ["A", "B", "C", "D"],
+                "industry": ["银行", "银行", "银行", "银行"],
+                "market": ["主板", "主板", "主板", "主板"],
+                "exchange": ["SZSE", "SZSE", "SZSE", "SZSE"],
+                "curr_type": ["CNY", "CNY", "CNY", "CNY"],
+                "list_date": ["20190101", "20200102", "20180101", "20200103"],
+                "delist_date": [None, "20200103", "20200102", None],
+                "is_hs": ["N", "H", "S", "N"],
+            }
+        )
+
+        with patch.object(TushareSource._rate_limiter, "acquire", return_value=None):
+            df = source.get_stock_list(trade_date="20200102")
+
+        assert set(df["symbol"]) == {"000001.SZ", "000002.SZ"}
+        assert (df["date"] == "20200102").all()
+        source.pro.stock_basic.assert_called_once_with(
+            ts_code=None,
+            exchange=None,
+            market=None,
+            list_status="L,D",
+            fields=source._STOCK_LIST_FIELDS,
+        )
+
+    def test_get_stock_list_excludes_delist_date_boundary(self):
+        source = object.__new__(TushareSource)
+        source.pro = MagicMock()
+        source.pro.stock_basic.return_value = pd.DataFrame(
+            {
+                "ts_code": ["000002.SZ"],
+                "name": ["B"],
+                "industry": ["银行"],
+                "market": ["主板"],
+                "exchange": ["SZSE"],
+                "curr_type": ["CNY"],
+                "list_date": ["20200102"],
+                "delist_date": ["20200103"],
+                "is_hs": ["H"],
+            }
+        )
+
+        with patch.object(TushareSource._rate_limiter, "acquire", return_value=None):
+            df = source.get_stock_list(trade_date="20200103")
+
+        assert df.empty
+
 
 class TestTushareIntegration:
     """Integration tests using real Tushare API data."""
@@ -27,6 +80,13 @@ class TestTushareIntegration:
         if not token:
             pytest.skip("TUSHARE_TOKEN not set")
         self.source = TushareSource(token=token)
+        today = date.today()
+        start = (today - timedelta(days=30)).strftime("%Y%m%d")
+        end = today.strftime("%Y%m%d")
+        calendar = self.source.get_calendar(start, end, is_open=True)
+        if calendar.empty:
+            pytest.skip("No recent trading day available from Tushare")
+        self.trade_date = calendar["date"].iloc[-1]
 
     def test_get_calendar(self):
         """Test get_calendar returns well-formed data with all dates."""
@@ -61,7 +121,7 @@ class TestTushareIntegration:
 
     def test_get_stock_list(self):
         """Test get_stock_list returns well-formed data for listed stocks."""
-        df = self.source.get_stock_list()
+        df = self.source.get_stock_list(trade_date=self.trade_date)
         expected_columns = {
             "symbol",
             "name",
@@ -90,7 +150,7 @@ class TestTushareIntegration:
 
     def test_get_stock_list_by_single_symbol(self):
         """Test get_stock_list with single symbol filter."""
-        df = self.source.get_stock_list(symbol="000001.SZ")
+        df = self.source.get_stock_list(trade_date=self.trade_date, symbol="000001.SZ")
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for symbol=000001.SZ"
@@ -99,7 +159,9 @@ class TestTushareIntegration:
 
     def test_get_stock_list_by_multiple_symbols(self):
         """Test get_stock_list with comma-separated multiple symbols."""
-        df = self.source.get_stock_list(symbol="000001.SZ,600000.SH")
+        df = self.source.get_stock_list(
+            trade_date=self.trade_date, symbol="000001.SZ,600000.SH"
+        )
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for multiple symbols"
@@ -107,7 +169,7 @@ class TestTushareIntegration:
 
     def test_get_stock_list_by_exchange(self):
         """Test get_stock_list with single exchange filter (SSE)."""
-        df = self.source.get_stock_list(exchange="SSE")
+        df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE")
         assert not df.empty, "get_stock_list returned empty DataFrame for exchange=SSE"
         assert (
             df["exchange"].str.contains("SSE").all()
@@ -115,7 +177,7 @@ class TestTushareIntegration:
 
     def test_get_stock_list_by_multiple_exchanges(self):
         """Test get_stock_list with comma-separated multiple exchanges."""
-        df = self.source.get_stock_list(exchange="SSE,SZE")
+        df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE,SZE")
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for multiple exchanges"
@@ -126,13 +188,13 @@ class TestTushareIntegration:
 
     def test_get_stock_list_by_board(self):
         """Test get_stock_list with single board filter (MB)."""
-        df = self.source.get_stock_list(board="MB")
+        df = self.source.get_stock_list(trade_date=self.trade_date, board="MB")
         assert not df.empty, "get_stock_list returned empty DataFrame for board=MB"
         assert df["board"].str.contains("MB").all(), "Expected all stocks to be from MB"
 
     def test_get_stock_list_by_multiple_boards(self):
         """Test get_stock_list with comma-separated multiple boards."""
-        df = self.source.get_stock_list(board="MB,GEM,STAR")
+        df = self.source.get_stock_list(trade_date=self.trade_date, board="MB,GEM,STAR")
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for multiple boards"
@@ -144,7 +206,9 @@ class TestTushareIntegration:
     def test_get_stock_list_combined_filters(self):
         """Test get_stock_list with multiple filters combined (AND semantics)."""
         # Two params: board + exchange
-        df2 = self.source.get_stock_list(board="MB", exchange="SSE")
+        df2 = self.source.get_stock_list(
+            trade_date=self.trade_date, board="MB", exchange="SSE"
+        )
         assert (
             not df2.empty
         ), "get_stock_list returned empty DataFrame for board=MB,exchange=SSE"
@@ -153,7 +217,10 @@ class TestTushareIntegration:
 
         # Three params: symbol + board + exchange (all compatible: 000001.SZ is MB on SZE)
         df3 = self.source.get_stock_list(
-            symbol="000001.SZ", board="MB", exchange="SZE"
+            trade_date=self.trade_date,
+            symbol="000001.SZ",
+            board="MB",
+            exchange="SZE",
         )
         assert (
             not df3.empty

@@ -141,21 +141,23 @@ class TushareSource(BaseSource):
 
     def get_stock_list(
         self,
+        trade_date: str,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         board: Optional[str] = None,
-        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
         Note:
-            - Only today's tradable (listed) stocks are returned.
+            - Returns the stock universe for the given snapshot date.
+            - Historical universe is reconstructed from stock_basic(list_status="L,D")
+              using list_date <= trade_date < delist_date, or open-ended if delist_date is empty.
 
         Args:
+            trade_date: snapshot date (YYYYMMDD); injected by api layer
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             board: see README, supports comma-separated multiple codes
-            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:
             DataFrame with columns: symbol, date, name, exchange, board, industry,
@@ -176,13 +178,14 @@ class TushareSource(BaseSource):
             ts_exchange = ",".join(ts_exchanges)
 
         # stock_basic API returns at most 6000 rows per call.
-        # If the result hits this limit, data is likely truncated — treat as error.
+        # Query listed + delisted names once, then reconstruct the requested universe
+        # from list_date / delist_date boundaries.
         self._rate_limiter.acquire()
         df = self.pro.stock_basic(
             ts_code=symbol,
             exchange=ts_exchange,
             market=board,
-            list_status="L",
+            list_status="L,D",
             fields=self._STOCK_LIST_FIELDS,
         )
 
@@ -194,7 +197,19 @@ class TushareSource(BaseSource):
                 "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
             )
             return self._empty_stock_list()
-        df = self._rename_columns(df).sort_values("symbol")
+
+        df = self._rename_columns(df)
+        df = df.drop_duplicates(subset=["symbol"]).reset_index(drop=True)
+        list_date = df["list_date"].fillna("")
+        delist_date = df["delist_date"].fillna("")
+        active_mask = (list_date <= trade_date) & (
+            (delist_date == "") | (trade_date < delist_date)
+        )
+        df = df[active_mask]
+        if df.empty:
+            return self._empty_stock_list()
+
+        df = df.sort_values("symbol")
         df["date"] = trade_date
         df["exchange"] = df["exchange"].map(lambda x: self._REVERSE_EXCHANGE_MAP.get(x, x))
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))

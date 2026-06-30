@@ -17,16 +17,16 @@
 
 ## 支持的主要功能
 
-| 功能         | API                    | tushare | ricequant | 说明                                                             |
-| ------------ | ---------------------- | :-----: | :-------: | ---------------------------------------------------------------- |
-| 交易日历     | `get_calendar`         |    ✓    |     ✓     |                                                                  |
-| 股票列表     | `get_stock_list`       |    △    |     ✓     | 支持 `trade_date` 参数；ricequant 支持历史时点，tushare 仅当日   |
-| 股票实时快照 | `get_stock_snapshot`   |    ✓    |     ✓     | 含5档盘口                                                        |
-| 股票日线     | `get_stock_daily_bar`  |    ✓    |     ✓     |                                                                  |
-| 股票分钟线   | `get_stock_minute_bar` |    ✗    |     ✓     |                                                                  |
-| 指数列表     | `get_index_list`       |    ✓    |     ✓     | 默认返回 SSE、SZE 指数                                           |
-| 指数日线     | `get_index_daily_bar`  |    ✓    |     ✓     |                                                                  |
-| 指数分钟线   | `get_index_minute_bar` |    ✗    |     ✓     |                                                                  |
+| 功能         | API                    | tushare | ricequant | 说明                             |
+| ------------ | ---------------------- | :-----: | :-------: | -------------------------------- |
+| 交易日历     | `get_calendar`         |    ✓    |     ✓     |                                  |
+| 股票列表     | `get_stock_list`       |    ✓    |     ✓     | 获取指定交易日当天的上市股票列表 |
+| 股票实时快照 | `get_stock_snapshot`   |    ✓    |     ✓     | 含5档盘口                        |
+| 股票日线     | `get_stock_daily_bar`  |    ✓    |     ✓     |                                  |
+| 股票分钟线   | `get_stock_minute_bar` |    ✗    |     ✓     |                                  |
+| 指数列表     | `get_index_list`       |    ✓    |     ✓     | 默认返回 SSE、SZE 指数           |
+| 指数日线     | `get_index_daily_bar`  |    ✓    |     ✓     |                                  |
+| 指数分钟线   | `get_index_minute_bar` |    ✗    |     ✓     |                                  |
 
 另有更多功能，可以前往api.py查看所有功能。
 
@@ -94,7 +94,7 @@ import hqdata
 
 hqdata.init_source("tushare")
 hqdata.get_stock_list()                         # 查询当日股票列表（上市状态）
-hqdata.get_stock_list(trade_date="20260101")    # 查询历史时点（ricequant 专属）
+hqdata.get_stock_list(trade_date="20260401")    # 查询历史时点股票池
 ```
 
 ## 命令行工具

@@ -143,7 +143,12 @@ def get_stock_list(
         raise RuntimeError("Data source not initialized. Call init_source() first.")
     if trade_date is None:
         trade_date = get_current_trading_day()
-    return _source.get_stock_list(symbol=symbol, exchange=exchange, board=board, trade_date=trade_date)
+    return _source.get_stock_list(
+        trade_date=trade_date,
+        symbol=symbol,
+        exchange=exchange,
+        board=board,
+    )
 
 
 def get_stock_snapshot(symbol: str) -> pd.DataFrame:

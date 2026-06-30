@@ -238,23 +238,23 @@ class TestStockListDateRange:
         assert mock_list.call_count == 1
         assert mock_list.call_args_list == [call(trade_date="20260515")]
 
-    def test_tushare_history_errors_out(self, runner, tmp_path):
-        """tushare with historical dates should print an error and not write files."""
+    def test_tushare_history_writes_csv_per_trading_day(self, runner, tmp_path):
+        calendar = pd.DataFrame({"date": ["20260514", "20260515"], "is_open": ["Y", "Y"]})
         with (
             patch("hqdata.cli.hqdata.init_source"),
             patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260518"),
+            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
+            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
         ):
             result = runner.invoke(
                 cli,
                 ["--source", "tushare", "--output", str(tmp_path), "stock-list",
-                 "--start", "20260501", "--end", "20260515"],
+                 "--start", "20260514", "--end", "20260515"],
             )
 
-        assert result.exit_code != 0
-        combined = result.output + (result.stderr or "")
-        assert "暂未支持" in combined
-        out_dir = tmp_path / "tushare" / "stock_list"
-        assert not out_dir.exists() or not any(out_dir.iterdir())
+        assert result.exit_code == 0
+        assert (tmp_path / "tushare" / "stock_list" / "20260514.csv").exists()
+        assert (tmp_path / "tushare" / "stock_list" / "20260515.csv").exists()
 
     def test_tushare_today_still_works(self, runner, tmp_path):
         """tushare without --start/--end (defaulting to today) should work fine."""
@@ -278,8 +278,10 @@ class TestStockListDateRange:
 
 class TestFetchStockDaily:
     def test_writes_csv_per_date(self, runner, tmp_path):
+        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
         with (
             patch("hqdata.cli.hqdata.init_source"),
+            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
             patch("hqdata.cli.hqdata.get_stock_daily_bar", return_value=DAILY_BAR_DF),
         ):
@@ -295,11 +297,16 @@ class TestFetchStockDaily:
         assert "symbol" in df.columns
         assert df["symbol"].iloc[0] == "600000.SH"
 
-    def test_single_batch_call(self, runner, tmp_path):
+    def test_uses_trade_date_stock_pool_per_day(self, runner, tmp_path):
+        calendar = pd.DataFrame({"date": ["20260102", "20260103"], "is_open": ["Y", "Y"]})
+        stock_list_day_1 = pd.DataFrame({"symbol": ["600000.SH"], "date": ["20260102"]})
+        stock_list_day_2 = pd.DataFrame({"symbol": ["000001.SZ"], "date": ["20260103"]})
+        mock_list = MagicMock(side_effect=[stock_list_day_1, stock_list_day_2])
         mock_bar = MagicMock(return_value=DAILY_BAR_DF)
         with (
             patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
+            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
+            patch("hqdata.cli.hqdata.get_stock_list", mock_list),
             patch("hqdata.cli.hqdata.get_stock_daily_bar", mock_bar),
         ):
             runner.invoke(
@@ -307,17 +314,23 @@ class TestFetchStockDaily:
                 ["--output", str(tmp_path), "stock-daily", "--start", "20260101", "--end", "20260103"],
             )
 
-        assert mock_bar.call_count == 1
-        called_symbols = mock_bar.call_args[0][0]
-        assert called_symbols == "600000.SH,000001.SZ"
+        assert mock_list.call_args_list == [
+            call(trade_date="20260102"),
+            call(trade_date="20260103"),
+        ]
+        assert mock_bar.call_count == 2
+        assert mock_bar.call_args_list[0] == call("600000.SH", start_date="20260102", end_date="20260102")
+        assert mock_bar.call_args_list[1] == call("000001.SZ", start_date="20260103", end_date="20260103")
 
     def test_no_data_no_file(self, runner, tmp_path):
+        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
         empty_bar = pd.DataFrame(
             columns=["symbol", "date", "pre_close", "open", "high", "low", "close",
                      "volume", "turnover", "change", "pct_change"]
         )
         with (
             patch("hqdata.cli.hqdata.init_source"),
+            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
             patch("hqdata.cli.hqdata.get_stock_daily_bar", return_value=empty_bar),
         ):
@@ -330,8 +343,10 @@ class TestFetchStockDaily:
         assert not out_dir.exists() or not any(out_dir.iterdir())
 
     def test_batch_error_no_crash(self, runner, tmp_path):
+        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
         with (
             patch("hqdata.cli.hqdata.init_source"),
+            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
             patch("hqdata.cli.hqdata.get_stock_daily_bar", side_effect=RuntimeError("API error")),
         ):
@@ -340,7 +355,6 @@ class TestFetchStockDaily:
                 ["--output", str(tmp_path), "stock-daily", "--start", "20260101", "--end", "20260103"],
             )
 
-        # On error, checkpoint/partial infrastructure may remain, but no date-based CSV should exist
         out_dir = tmp_path / "tushare" / "stock_daily"
         assert not any(out_dir.glob("*.csv")) if out_dir.exists() else True
 
@@ -352,8 +366,10 @@ class TestFetchStockDaily:
 
 class TestFetchStockMinute:
     def test_writes_csv_per_date(self, runner, tmp_path):
+        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
         with (
             patch("hqdata.cli.hqdata.init_source"),
+            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
             patch("hqdata.cli.hqdata.get_stock_minute_bar", return_value=MINUTE_BAR_DF),
         ):
@@ -368,9 +384,11 @@ class TestFetchStockMinute:
         assert out_file.exists()
 
     def test_frequency_passed(self, runner, tmp_path):
+        calendar = pd.DataFrame({"date": ["20260401", "20260402"], "is_open": ["Y", "Y"]})
         mock_bar = MagicMock(return_value=MINUTE_BAR_DF)
         with (
             patch("hqdata.cli.hqdata.init_source"),
+            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
             patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
             patch("hqdata.cli.hqdata.get_stock_minute_bar", mock_bar),
         ):
@@ -380,10 +398,12 @@ class TestFetchStockMinute:
                  "--frequency", "15m"],
             )
 
-        for c in mock_bar.call_args_list:
-            # frequency is passed as a positional or keyword arg via the lambda wrapper
-            call_args = c[0]  # positional args tuple: (symbols_str, frequency, ...)
+        assert len(mock_bar.call_args_list) == 2
+        for expected_day, c in zip(["20260401", "20260402"], mock_bar.call_args_list):
+            call_args = c[0]
+            call_kwargs = c[1]
             assert call_args[1] == "15m"
+            assert call_kwargs == {"start_date": expected_day, "end_date": expected_day}
 
 
 # ---------------------------------------------------------------------------

@@ -216,10 +216,10 @@ class RicequantSource(BaseSource):
 
     def get_stock_list(
         self,
+        trade_date: str,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
         board: Optional[str] = None,
-        trade_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """Get basic info for stocks.
 
@@ -227,10 +227,10 @@ class RicequantSource(BaseSource):
             - Only today's tradable (listed) stocks are returned.
 
         Args:
+            trade_date: snapshot date (YYYYMMDD); injected by api layer
             symbol: see README, supports comma-separated multiple codes
             exchange: see README, supports comma-separated multiple exchanges
             board: see README, supports comma-separated multiple codes
-            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
 
         Returns:
             DataFrame with columns: symbol, date, name, exchange, board, industry,

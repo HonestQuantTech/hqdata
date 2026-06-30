@@ -62,6 +62,49 @@ def _run_for_sources(obj: dict, fn: Callable[[str, Path], None]) -> None:
     click.echo("\nAll done.")
 
 
+def _fetch_stock_bar_by_trading_day(
+    source: str,
+    get_bar_fn,
+    start: Optional[str],
+    end: Optional[str],
+    out_dir: Path,
+    tag: str,
+) -> None:
+    if start is None or end is None:
+        today = hqdata.get_current_trading_day()
+    else:
+        today = None
+    actual_start = start or today
+    actual_end = end or today
+
+    calendar_df = hqdata.get_calendar(actual_start, actual_end, is_open=True)
+    trading_days = calendar_df["date"].tolist()
+    frames: list[pd.DataFrame] = []
+
+    for trading_day in trading_days:
+        click.echo(f"[{tag}] Fetching stock list for {trading_day}...")
+        symbols = hqdata.get_stock_list(trade_date=trading_day)["symbol"].tolist()
+        if not symbols:
+            continue
+
+        click.echo(f"[{tag}] Fetching bars for {trading_day} ({len(symbols)} symbols)...")
+        try:
+            df = get_bar_fn(",".join(symbols), start_date=trading_day, end_date=trading_day)
+        except Exception as e:
+            click.echo(f"[{tag}] ERROR: {e}", err=True)
+            return
+
+        if df is not None and not df.empty:
+            frames.append(df)
+
+    if not frames:
+        click.echo(f"[{tag}] No data fetched.")
+        return
+
+    merged = pd.concat(frames, ignore_index=True)
+    _write_by_date(merged, out_dir, tag)
+
+
 def _fetch_bar_with_checkpoint(
     cmd: str,
     source: str,
@@ -241,21 +284,12 @@ def cmd_stock_list(obj: dict, start: Optional[str], end: Optional[str]) -> None:
 
     \b
     When --start/--end are omitted, only the current trading day is fetched.
-    Note: tushare only supports the current trading day; use ricequant for history.
     """
 
     def fetch(source: str, output_root: Path) -> None:
         today = hqdata.get_current_trading_day()
         actual_start = start or today
         actual_end = end or today
-
-        if source == "tushare" and (actual_start != today or actual_end != today):
-            click.echo(
-                f"[{source}][stock-list] ERROR: tushare 历史股票列表查询暂未支持，功能开发中，"
-                "请使用 --source ricequant 获取历史时点列表。",
-                err=True,
-            )
-            raise SystemExit(1)
 
         calendar_df = hqdata.get_calendar(actual_start, actual_end, is_open=True)
         trading_days = calendar_df["date"].tolist()
@@ -293,15 +327,11 @@ def cmd_stock_minute(obj: dict, start: Optional[str], end: Optional[str], freque
     """Fetch stock minute bar data (ricequant only)."""
 
     def fetch(source: str, output_root: Path) -> None:
-        click.echo(f"[{source}][stock-minute] Fetching stock list...")
-        symbols = hqdata.get_stock_list()["symbol"].tolist()
-        click.echo(f"[{source}][stock-minute] {len(symbols)} symbols found. Fetching bars...")
-        _fetch_bar_with_checkpoint(
-            cmd="stock-minute",
+        _fetch_stock_bar_by_trading_day(
             source=source,
             get_bar_fn=lambda s, **kw: hqdata.get_stock_minute_bar(s, frequency, **kw),
-            symbols=symbols,
-            bar_kwargs={"start_date": start, "end_date": end},
+            start=start,
+            end=end,
             out_dir=output_root / source / "stock_minute",
             tag=f"{source}][stock-minute",
         )
@@ -317,15 +347,11 @@ def cmd_stock_daily(obj: dict, start: Optional[str], end: Optional[str]) -> None
     """Fetch stock daily bar data."""
 
     def fetch(source: str, output_root: Path) -> None:
-        click.echo(f"[{source}][stock-daily] Fetching stock list...")
-        symbols = hqdata.get_stock_list()["symbol"].tolist()
-        click.echo(f"[{source}][stock-daily] {len(symbols)} symbols found. Fetching bars...")
-        _fetch_bar_with_checkpoint(
-            cmd="stock-daily",
+        _fetch_stock_bar_by_trading_day(
             source=source,
             get_bar_fn=hqdata.get_stock_daily_bar,
-            symbols=symbols,
-            bar_kwargs={"start_date": start, "end_date": end},
+            start=start,
+            end=end,
             out_dir=output_root / source / "stock_daily",
             tag=f"{source}][stock-daily",
         )

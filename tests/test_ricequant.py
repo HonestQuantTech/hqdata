@@ -1,6 +1,7 @@
 """Tests for ricequant source"""
 
 import os
+from datetime import date, timedelta
 import pytest
 from unittest.mock import patch
 
@@ -32,6 +33,13 @@ class TestRicequantIntegration:
             self.source = RicequantSource(license_key=license_key)
         else:
             self.source = RicequantSource(username=username, password=password)
+        today = date.today()
+        start = (today - timedelta(days=30)).strftime("%Y%m%d")
+        end = today.strftime("%Y%m%d")
+        calendar = self.source.get_calendar(start, end, is_open=True)
+        if calendar.empty:
+            pytest.skip("No recent trading day available from Ricequant")
+        self.trade_date = calendar["date"].iloc[-1]
 
     def test_get_calendar(self):
         """Test get_calendar returns well-formed data with all dates."""
@@ -66,7 +74,7 @@ class TestRicequantIntegration:
 
     def test_get_stock_list(self):
         """Test get_stock_list returns well-formed data for listed stocks."""
-        df = self.source.get_stock_list()
+        df = self.source.get_stock_list(trade_date=self.trade_date)
         expected_columns = {
             "symbol",
             "name",
@@ -95,7 +103,7 @@ class TestRicequantIntegration:
 
     def test_get_stock_list_by_single_symbol(self):
         """Test get_stock_list with single symbol filter."""
-        df = self.source.get_stock_list(symbol="000001.SZ")
+        df = self.source.get_stock_list(trade_date=self.trade_date, symbol="000001.SZ")
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for symbol=000001.SZ"
@@ -104,7 +112,9 @@ class TestRicequantIntegration:
 
     def test_get_stock_list_by_multiple_symbols(self):
         """Test get_stock_list with comma-separated multiple symbols."""
-        df = self.source.get_stock_list(symbol="000001.SZ,600000.SH")
+        df = self.source.get_stock_list(
+            trade_date=self.trade_date, symbol="000001.SZ,600000.SH"
+        )
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for multiple symbols"
@@ -112,7 +122,7 @@ class TestRicequantIntegration:
 
     def test_get_stock_list_by_exchange(self):
         """Test get_stock_list with single exchange filter (SSE)."""
-        df = self.source.get_stock_list(exchange="SSE")
+        df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE")
         assert not df.empty, "get_stock_list returned empty DataFrame for exchange=SSE"
         assert (
             df["exchange"].str.contains("SSE").all()
@@ -120,7 +130,7 @@ class TestRicequantIntegration:
 
     def test_get_stock_list_by_multiple_exchanges(self):
         """Test get_stock_list with comma-separated multiple exchanges."""
-        df = self.source.get_stock_list(exchange="SSE,SZE")
+        df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE,SZE")
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for multiple exchanges"
@@ -130,13 +140,13 @@ class TestRicequantIntegration:
 
     def test_get_stock_list_by_board(self):
         """Test get_stock_list with single board filter (MB)."""
-        df = self.source.get_stock_list(board="MB")
+        df = self.source.get_stock_list(trade_date=self.trade_date, board="MB")
         assert not df.empty, "get_stock_list returned empty DataFrame for board=MB"
         assert df["board"].str.contains("MB").all(), "Expected all stocks to be from MB"
 
     def test_get_stock_list_by_multiple_boards(self):
         """Test get_stock_list with comma-separated multiple boards."""
-        df = self.source.get_stock_list(board="MB,GEM,STAR")
+        df = self.source.get_stock_list(trade_date=self.trade_date, board="MB,GEM,STAR")
         assert (
             not df.empty
         ), "get_stock_list returned empty DataFrame for multiple boards"
@@ -148,7 +158,9 @@ class TestRicequantIntegration:
     def test_get_stock_list_combined_filters(self):
         """Test get_stock_list with multiple filters combined (AND semantics)."""
         # Two params: board + exchange
-        df2 = self.source.get_stock_list(board="MB", exchange="SSE")
+        df2 = self.source.get_stock_list(
+            trade_date=self.trade_date, board="MB", exchange="SSE"
+        )
         assert (
             not df2.empty
         ), "get_stock_list returned empty DataFrame for board=MB,exchange=SSE"
@@ -157,7 +169,10 @@ class TestRicequantIntegration:
 
         # Three params: symbol + board + exchange (all compatible: 000001.SZ is MB on SZE)
         df3 = self.source.get_stock_list(
-            symbol="000001.SZ", board="MB", exchange="SZE"
+            trade_date=self.trade_date,
+            symbol="000001.SZ",
+            board="MB",
+            exchange="SZE",
         )
         assert (
             not df3.empty
