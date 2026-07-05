@@ -10,6 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 
 import hqdata
+from hqdata.compare_cli import compare
 
 VALID_SOURCES = ["tushare", "ricequant"]
 VALID_FREQUENCIES = ["1m", "5m", "15m", "30m", "60m"]
@@ -87,9 +88,13 @@ def _fetch_stock_bar_by_trading_day(
         if not symbols:
             continue
 
-        click.echo(f"[{tag}] Fetching bars for {trading_day} ({len(symbols)} symbols)...")
+        click.echo(
+            f"[{tag}] Fetching bars for {trading_day} ({len(symbols)} symbols)..."
+        )
         try:
-            df = get_bar_fn(",".join(symbols), start_date=trading_day, end_date=trading_day)
+            df = get_bar_fn(
+                ",".join(symbols), start_date=trading_day, end_date=trading_day
+            )
         except Exception as e:
             click.echo(f"[{tag}] ERROR: {e}", err=True)
             return
@@ -129,14 +134,24 @@ def _fetch_bar_with_checkpoint(
     if checkpoint_path.exists():
         try:
             cp = json.loads(checkpoint_path.read_text())
-            cur = (source, cmd, bar_kwargs.get("start_date"), bar_kwargs.get("end_date"))
+            cur = (
+                source,
+                cmd,
+                bar_kwargs.get("start_date"),
+                bar_kwargs.get("end_date"),
+            )
             saved = (cp.get("source"), cp.get("cmd"), cp.get("start"), cp.get("end"))
             if cur == saved and "symbols" in cp:
                 # Restore the exact symbol list from the first run for consistency
                 symbols = cp["symbols"]
                 done_set = set(cp.get("done", []))
-                all_chunks = [symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)]
-                remaining = sum(1 for c in all_chunks if not all(s in done_set for s in c))
+                all_chunks = [
+                    symbols[i : i + chunk_size]
+                    for i in range(0, len(symbols), chunk_size)
+                ]
+                remaining = sum(
+                    1 for c in all_chunks if not all(s in done_set for s in c)
+                )
                 click.echo(
                     f"[{tag}] Resuming from checkpoint: {len(done_set)}/{len(symbols)} symbols done, "
                     f"{remaining}/{len(all_chunks)} chunks remaining."
@@ -147,20 +162,24 @@ def _fetch_bar_with_checkpoint(
         except Exception:
             _cleanup_partial(partial_dir, checkpoint_path)
 
-    all_chunks = [symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)]
+    all_chunks = [
+        symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
+    ]
     partial_dir.mkdir(parents=True, exist_ok=True)
 
     # Write initial checkpoint with the full symbol list before fetching starts
     if not checkpoint_path.exists():
         checkpoint_path.write_text(
-            json.dumps({
-                "source": source,
-                "cmd": cmd,
-                "start": bar_kwargs.get("start_date"),
-                "end": bar_kwargs.get("end_date"),
-                "symbols": symbols,
-                "done": [],
-            })
+            json.dumps(
+                {
+                    "source": source,
+                    "cmd": cmd,
+                    "start": bar_kwargs.get("start_date"),
+                    "end": bar_kwargs.get("end_date"),
+                    "symbols": symbols,
+                    "done": [],
+                }
+            )
         )
 
     error_occurred = False
@@ -184,18 +203,24 @@ def _fetch_bar_with_checkpoint(
                 break
 
             if df is not None and not df.empty:
-                df.to_csv(partial_dir / f"chunk_{chunk_idx:05d}.csv", index=False, encoding="utf-8")
+                df.to_csv(
+                    partial_dir / f"chunk_{chunk_idx:05d}.csv",
+                    index=False,
+                    encoding="utf-8",
+                )
 
             done_set.update(chunk)
             checkpoint_path.write_text(
-                json.dumps({
-                    "source": source,
-                    "cmd": cmd,
-                    "start": bar_kwargs.get("start_date"),
-                    "end": bar_kwargs.get("end_date"),
-                    "symbols": symbols,
-                    "done": list(done_set),
-                })
+                json.dumps(
+                    {
+                        "source": source,
+                        "cmd": cmd,
+                        "start": bar_kwargs.get("start_date"),
+                        "end": bar_kwargs.get("end_date"),
+                        "symbols": symbols,
+                        "done": list(done_set),
+                    }
+                )
             )
             pbar.update(1)
 
@@ -253,6 +278,9 @@ def cli(ctx: click.Context, source: str, output: str) -> None:
     ctx.obj["output_root"] = output_root
 
 
+cli.add_command(compare)
+
+
 # ---------------------------------------------------------------------------
 # commands (in api.py order)
 # ---------------------------------------------------------------------------
@@ -276,8 +304,18 @@ def cmd_calendar(obj: dict, start: str, end: str) -> None:
 
 
 @cli.command("stock-list")
-@click.option("--start", default=None, metavar="YYYYMMDD", help="Start date (default: current trading day)")
-@click.option("--end", default=None, metavar="YYYYMMDD", help="End date (default: current trading day)")
+@click.option(
+    "--start",
+    default=None,
+    metavar="YYYYMMDD",
+    help="Start date (default: current trading day)",
+)
+@click.option(
+    "--end",
+    default=None,
+    metavar="YYYYMMDD",
+    help="End date (default: current trading day)",
+)
 @click.pass_obj
 def cmd_stock_list(obj: dict, start: Optional[str], end: Optional[str]) -> None:
     """Fetch stock list for a date range and save one CSV per trading day.
@@ -303,27 +341,48 @@ def cmd_stock_list(obj: dict, start: Optional[str], end: Optional[str]) -> None:
                 continue
             click.echo(f"[{source}][stock-list] Fetching {d}...")
             df = hqdata.get_stock_list(trade_date=d)
+            bad_dates = sorted(set(df.loc[df["date"] != d, "date"]))
+            if bad_dates:
+                raise click.ClickException(
+                    f"[{source}][stock-list] date column contains {', '.join(bad_dates)} "
+                    f"while fetching {d}; refusing to write {out_path}"
+                )
             _write_csv(df, out_path)
 
         if skipped:
-            click.echo(f"[{source}][stock-list] Skipped {skipped} already-existing file(s).")
+            click.echo(
+                f"[{source}][stock-list] Skipped {skipped} already-existing file(s)."
+            )
         click.echo(f"[{source}][stock-list] Done. Written to {out_dir}")
 
     _run_for_sources(obj, fetch)
 
 
 @cli.command("stock-minute")
-@click.option("--start", default=None, metavar="YYYYMMDD", help="Start date (default: current trading day)")
-@click.option("--end", default=None, metavar="YYYYMMDD", help="End date (default: current trading day)")
 @click.option(
-    "--frequency", "-f",
+    "--start",
+    default=None,
+    metavar="YYYYMMDD",
+    help="Start date (default: current trading day)",
+)
+@click.option(
+    "--end",
+    default=None,
+    metavar="YYYYMMDD",
+    help="End date (default: current trading day)",
+)
+@click.option(
+    "--frequency",
+    "-f",
     default="1m",
     type=click.Choice(VALID_FREQUENCIES),
     show_default=True,
     help="Bar frequency.",
 )
 @click.pass_obj
-def cmd_stock_minute(obj: dict, start: Optional[str], end: Optional[str], frequency: str) -> None:
+def cmd_stock_minute(
+    obj: dict, start: Optional[str], end: Optional[str], frequency: str
+) -> None:
     """Fetch stock minute bar data (ricequant only)."""
 
     def fetch(source: str, output_root: Path) -> None:
@@ -340,8 +399,18 @@ def cmd_stock_minute(obj: dict, start: Optional[str], end: Optional[str], freque
 
 
 @cli.command("stock-daily")
-@click.option("--start", default=None, metavar="YYYYMMDD", help="Start date (default: current trading day)")
-@click.option("--end", default=None, metavar="YYYYMMDD", help="End date (default: current trading day)")
+@click.option(
+    "--start",
+    default=None,
+    metavar="YYYYMMDD",
+    help="Start date (default: current trading day)",
+)
+@click.option(
+    "--end",
+    default=None,
+    metavar="YYYYMMDD",
+    help="End date (default: current trading day)",
+)
 @click.pass_obj
 def cmd_stock_daily(obj: dict, start: Optional[str], end: Optional[str]) -> None:
     """Fetch stock daily bar data."""
@@ -382,23 +451,38 @@ def cmd_index_list(obj: dict, market: str) -> None:
 
 
 @cli.command("index-minute")
-@click.option("--start", default=None, metavar="YYYYMMDD", help="Start date (default: current trading day)")
-@click.option("--end", default=None, metavar="YYYYMMDD", help="End date (default: current trading day)")
 @click.option(
-    "--frequency", "-f",
+    "--start",
+    default=None,
+    metavar="YYYYMMDD",
+    help="Start date (default: current trading day)",
+)
+@click.option(
+    "--end",
+    default=None,
+    metavar="YYYYMMDD",
+    help="End date (default: current trading day)",
+)
+@click.option(
+    "--frequency",
+    "-f",
     default="1m",
     type=click.Choice(VALID_FREQUENCIES),
     show_default=True,
     help="Bar frequency.",
 )
 @click.pass_obj
-def cmd_index_minute(obj: dict, start: Optional[str], end: Optional[str], frequency: str) -> None:
+def cmd_index_minute(
+    obj: dict, start: Optional[str], end: Optional[str], frequency: str
+) -> None:
     """Fetch index minute bar data (ricequant only)."""
 
     def fetch(source: str, output_root: Path) -> None:
         click.echo(f"[{source}][index-minute] Fetching index list...")
         symbols = hqdata.get_index_list()["symbol"].tolist()
-        click.echo(f"[{source}][index-minute] {len(symbols)} symbols found. Fetching bars...")
+        click.echo(
+            f"[{source}][index-minute] {len(symbols)} symbols found. Fetching bars..."
+        )
         _fetch_bar_with_checkpoint(
             cmd="index-minute",
             source=source,
@@ -413,8 +497,18 @@ def cmd_index_minute(obj: dict, start: Optional[str], end: Optional[str], freque
 
 
 @cli.command("index-daily")
-@click.option("--start", default=None, metavar="YYYYMMDD", help="Start date (default: current trading day)")
-@click.option("--end", default=None, metavar="YYYYMMDD", help="End date (default: current trading day)")
+@click.option(
+    "--start",
+    default=None,
+    metavar="YYYYMMDD",
+    help="Start date (default: current trading day)",
+)
+@click.option(
+    "--end",
+    default=None,
+    metavar="YYYYMMDD",
+    help="End date (default: current trading day)",
+)
 @click.pass_obj
 def cmd_index_daily(obj: dict, start: Optional[str], end: Optional[str]) -> None:
     """Fetch index daily bar data."""
@@ -422,7 +516,9 @@ def cmd_index_daily(obj: dict, start: Optional[str], end: Optional[str]) -> None
     def fetch(source: str, output_root: Path) -> None:
         click.echo(f"[{source}][index-daily] Fetching index list...")
         symbols = hqdata.get_index_list()["symbol"].tolist()
-        click.echo(f"[{source}][index-daily] {len(symbols)} symbols found. Fetching bars...")
+        click.echo(
+            f"[{source}][index-daily] {len(symbols)} symbols found. Fetching bars..."
+        )
         _fetch_bar_with_checkpoint(
             cmd="index-daily",
             source=source,

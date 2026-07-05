@@ -1,0 +1,358 @@
+"""Subcommands for comparing stored data across sources."""
+
+from pathlib import Path
+
+import click
+import pandas as pd
+
+
+_EXCHANGE_NORMALIZE_MAP = {
+    "BJSE": "BSE",
+    "XSHG": "SSE",
+    "XSHE": "SZE",
+    "SZSE": "SZE",
+}
+
+_STOCK_LIST_COLUMNS = [
+    "symbol",
+    "date",
+    "name",
+    "exchange",
+    "board",
+    "industry",
+    "curr_type",
+    "list_date",
+    "delist_date",
+    "is_hs",
+]
+
+_STOCK_DIFF_COLUMNS = [
+    "date",
+    "symbol",
+    "status",
+    "field",
+    "tushare_value",
+    "ricequant_value",
+]
+
+_STOCK_COMPARE_FIELDS = ["exchange", "board", "curr_type", "list_date", "delist_date"]
+
+
+def _write_csv(df: pd.DataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8")
+
+
+def _normalize_basic_date(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if text in {"", "0000-00-00", "None", "nan", "NaT", "<NA>"}:
+        return ""
+    return text.replace("-", "")
+
+
+def _normalize_text(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if text in {"None", "nan", "NaT", "<NA>"}:
+        return ""
+    return text
+
+
+def _normalize_exchange(value: object) -> str:
+    text = _normalize_text(value).upper()
+    return _EXCHANGE_NORMALIZE_MAP.get(text, text)
+
+
+def _load_calendar_csv(path: Path, source: str) -> pd.DataFrame:
+    if not path.exists():
+        raise click.ClickException(f"Missing calendar file for {source}: {path}")
+
+    df = pd.read_csv(path, dtype={"date": str, "is_open": str})
+    required = {"date", "is_open"}
+    missing = required - set(df.columns)
+    if missing:
+        missing_cols = ", ".join(sorted(missing))
+        raise click.ClickException(
+            f"Invalid calendar file for {source}: missing column(s) {missing_cols}"
+        )
+
+    normalized = df[["date", "is_open"]].copy()
+    normalized["date"] = (
+        normalized["date"].astype(str).str.replace("-", "", regex=False)
+    )
+    normalized["is_open"] = normalized["is_open"].astype(str).str.strip().str.upper()
+    return (
+        normalized.sort_values("date")
+        .drop_duplicates(subset=["date"], keep="last")
+        .reset_index(drop=True)
+    )
+
+
+def _compare_calendar_frames(
+    tushare_df: pd.DataFrame, ricequant_df: pd.DataFrame
+) -> pd.DataFrame:
+    merged = tushare_df.merge(
+        ricequant_df,
+        on="date",
+        how="outer",
+        suffixes=("_tushare", "_ricequant"),
+        indicator=True,
+    )
+
+    only_tushare = merged[merged["_merge"] == "left_only"].copy()
+    only_tushare["status"] = "only_tushare"
+
+    only_ricequant = merged[merged["_merge"] == "right_only"].copy()
+    only_ricequant["status"] = "only_ricequant"
+
+    mismatched = merged[
+        (merged["_merge"] == "both")
+        & (merged["is_open_tushare"] != merged["is_open_ricequant"])
+    ].copy()
+    mismatched["status"] = "mismatch_is_open"
+
+    diff = pd.concat([mismatched, only_tushare, only_ricequant], ignore_index=True)
+    if diff.empty:
+        return pd.DataFrame(
+            columns=["date", "status", "tushare_is_open", "ricequant_is_open"]
+        )
+
+    diff = diff.rename(
+        columns={
+            "is_open_tushare": "tushare_is_open",
+            "is_open_ricequant": "ricequant_is_open",
+        }
+    )
+    cols = ["date", "status", "tushare_is_open", "ricequant_is_open"]
+    return diff[cols].sort_values(["date", "status"]).reset_index(drop=True)
+
+
+def _load_stock_list_csv(path: Path, source: str) -> pd.DataFrame:
+    if not path.exists():
+        raise click.ClickException(f"Missing stock_list file for {source}: {path}")
+
+    df = pd.read_csv(path, dtype=str)
+    missing = set(_STOCK_LIST_COLUMNS) - set(df.columns)
+    if missing:
+        missing_cols = ", ".join(sorted(missing))
+        raise click.ClickException(
+            f"Invalid stock_list file for {source}: missing column(s) {missing_cols}"
+        )
+
+    normalized = df[_STOCK_LIST_COLUMNS].copy()
+    normalized["symbol"] = normalized["symbol"].map(_normalize_text)
+    normalized["date"] = normalized["date"].map(_normalize_basic_date)
+    normalized["name"] = normalized["name"].map(_normalize_text)
+    normalized["exchange"] = normalized["exchange"].map(_normalize_exchange)
+    normalized["board"] = normalized["board"].map(_normalize_text).str.upper()
+    normalized["industry"] = normalized["industry"].map(_normalize_text)
+    normalized["curr_type"] = normalized["curr_type"].map(_normalize_text).str.upper()
+    normalized["list_date"] = normalized["list_date"].map(_normalize_basic_date)
+    normalized["delist_date"] = normalized["delist_date"].map(_normalize_basic_date)
+    normalized["is_hs"] = normalized["is_hs"].map(_normalize_text).str.upper()
+
+    bad_dates = sorted(set(normalized.loc[normalized["date"] != path.stem, "date"]))
+    if bad_dates:
+        raise click.ClickException(
+            f"Invalid stock_list file for {source}: {path} contains date value(s) "
+            f"{', '.join(bad_dates)} not matching the file name"
+        )
+
+    return (
+        normalized.sort_values("symbol")
+        .drop_duplicates(subset=["symbol"], keep="last")
+        .reset_index(drop=True)
+    )
+
+
+def _load_stock_list_dir(path: Path, source: str) -> dict[str, pd.DataFrame]:
+    if not path.exists() or not path.is_dir():
+        raise click.ClickException(f"Missing stock_list directory for {source}: {path}")
+    return {
+        file.stem: _load_stock_list_csv(file, source)
+        for file in sorted(path.glob("*.csv"))
+    }
+
+
+def _load_non_trading_days(output_root: Path, source: str) -> set[str]:
+    """Return calendar dates with is_open != Y; empty set if no calendar stored."""
+    path = output_root / source / "calendar.csv"
+    if not path.exists():
+        return set()
+    calendar = _load_calendar_csv(path, source)
+    return set(calendar.loc[calendar["is_open"] != "Y", "date"])
+
+
+def _diff_row(
+    date: object,
+    symbol: object,
+    status: str,
+    field: str = "",
+    tushare_value: object = "",
+    ricequant_value: object = "",
+) -> dict[str, object]:
+    return {
+        "date": date,
+        "symbol": symbol,
+        "status": status,
+        "field": field,
+        "tushare_value": tushare_value,
+        "ricequant_value": ricequant_value,
+    }
+
+
+def _compare_stock_list_frames(
+    tushare_df: pd.DataFrame, ricequant_df: pd.DataFrame
+) -> list[dict[str, object]]:
+    merged = tushare_df.merge(
+        ricequant_df,
+        on=["date", "symbol"],
+        how="outer",
+        suffixes=("_tushare", "_ricequant"),
+        indicator=True,
+    )
+
+    rows: list[dict[str, object]] = []
+
+    for row in merged[merged["_merge"] == "left_only"].itertuples():
+        rows.append(
+            _diff_row(
+                row.date, row.symbol, "symbol_only_tushare", tushare_value="present"
+            )
+        )
+
+    for row in merged[merged["_merge"] == "right_only"].itertuples():
+        rows.append(
+            _diff_row(
+                row.date, row.symbol, "symbol_only_ricequant", ricequant_value="present"
+            )
+        )
+
+    both = merged[merged["_merge"] == "both"]
+    for field in _STOCK_COMPARE_FIELDS:
+        tushare_values = both[f"{field}_tushare"]
+        ricequant_values = both[f"{field}_ricequant"]
+        if field == "delist_date":
+            # A delist date later than the snapshot date has not taken effect yet;
+            # sources fill it at different times, so treat it as empty.
+            tushare_values = tushare_values.mask(tushare_values > both["date"], "")
+            ricequant_values = ricequant_values.mask(
+                ricequant_values > both["date"], ""
+            )
+        mismatch = tushare_values != ricequant_values
+        for date, symbol, tushare_value, ricequant_value in zip(
+            both.loc[mismatch, "date"],
+            both.loc[mismatch, "symbol"],
+            tushare_values[mismatch],
+            ricequant_values[mismatch],
+        ):
+            rows.append(
+                _diff_row(
+                    date,
+                    symbol,
+                    "value_mismatch",
+                    field,
+                    tushare_value,
+                    ricequant_value,
+                )
+            )
+
+    return rows
+
+
+@click.group("compare")
+def compare() -> None:
+    """Compare stored data files across sources."""
+
+
+@compare.command("calendar")
+@click.pass_context
+def cmd_compare_calendar(ctx: click.Context) -> None:
+    """Compare stored tushare/ricequant calendar.csv files."""
+
+    output_root = ctx.obj["output_root"]
+    tushare_path = output_root / "tushare" / "calendar.csv"
+    ricequant_path = output_root / "ricequant" / "calendar.csv"
+
+    tushare_df = _load_calendar_csv(tushare_path, "tushare")
+    ricequant_df = _load_calendar_csv(ricequant_path, "ricequant")
+    diff = _compare_calendar_frames(tushare_df, ricequant_df)
+
+    report_path = output_root / "compare" / "calendar_diff.csv"
+    if diff.empty:
+        if report_path.exists():
+            report_path.unlink()
+        click.echo("[compare calendar] No differences found.")
+        return
+
+    _write_csv(diff, report_path)
+    click.echo(
+        f"[compare calendar] Differences found: {len(diff)} rows. Report written to {report_path}"
+    )
+    ctx.exit(1)
+
+
+@compare.command("stock-list")
+@click.pass_context
+def cmd_compare_stock_list(ctx: click.Context) -> None:
+    """Compare stored tushare/ricequant stock_list CSV files."""
+
+    output_root = ctx.obj["output_root"]
+    tushare_files = _load_stock_list_dir(
+        output_root / "tushare" / "stock_list", "tushare"
+    )
+    ricequant_files = _load_stock_list_dir(
+        output_root / "ricequant" / "stock_list", "ricequant"
+    )
+
+    rows: list[dict[str, object]] = []
+    tushare_dates = set(tushare_files)
+    ricequant_dates = set(ricequant_files)
+
+    # Stock list files must never exist for non-trading days (per each source's calendar)
+    for source, dates in (("tushare", tushare_dates), ("ricequant", ricequant_dates)):
+        non_trading_days = _load_non_trading_days(output_root, source)
+        for date in sorted(dates & non_trading_days):
+            rows.append(
+                _diff_row(
+                    date,
+                    "",
+                    f"file_not_trading_day_{source}",
+                    tushare_value="present" if source == "tushare" else "",
+                    ricequant_value="present" if source == "ricequant" else "",
+                )
+            )
+
+    for date in sorted(tushare_dates - ricequant_dates):
+        rows.append(_diff_row(date, "", "file_only_tushare", tushare_value="present"))
+
+    for date in sorted(ricequant_dates - tushare_dates):
+        rows.append(
+            _diff_row(date, "", "file_only_ricequant", ricequant_value="present")
+        )
+
+    for date in sorted(tushare_dates & ricequant_dates):
+        rows.extend(
+            _compare_stock_list_frames(tushare_files[date], ricequant_files[date])
+        )
+
+    report_path = output_root / "compare" / "stock_list_diff.csv"
+    if not rows:
+        if report_path.exists():
+            report_path.unlink()
+        click.echo("[compare stock-list] No differences found.")
+        return
+
+    diff = (
+        pd.DataFrame(rows, columns=_STOCK_DIFF_COLUMNS)
+        .sort_values(["date", "symbol", "status", "field"])
+        .reset_index(drop=True)
+    )
+    _write_csv(diff, report_path)
+    click.echo(
+        f"[compare stock-list] Differences found: {len(diff)} rows. Report written to {report_path}"
+    )
+    ctx.exit(1)

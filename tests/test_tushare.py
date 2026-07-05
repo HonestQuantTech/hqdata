@@ -1,13 +1,34 @@
 """Tests for tushare source"""
 
 import os
+import re
 from datetime import date, timedelta
-import pytest
 from unittest.mock import MagicMock, patch
-import pandas as pd
 
-import hqdata.config
+import pandas as pd
+import pytest
+
+import hqdata.config  # noqa: F401  加载 .env
 from hqdata.sources.tushare import TushareSource
+from tests.helpers import (
+    DATE_PATTERN,
+    ETS_PATTERN,
+    INDEX_DAILY_BAR_COLUMNS,
+    INDEX_LIST_COLUMNS,
+    STOCK_DAILY_BAR_COLUMNS,
+    STOCK_LIST_COLUMNS,
+    STOCK_SNAPSHOT_COLUMNS,
+    assert_daily_bar_sanity,
+    assert_has_columns,
+)
+
+
+def make_source_with_stock_basic(stock_basic_df: pd.DataFrame) -> TushareSource:
+    """Build an uninitialized TushareSource whose pro.stock_basic returns the given frame."""
+    source = object.__new__(TushareSource)
+    source.pro = MagicMock()
+    source.pro.stock_basic.return_value = stock_basic_df
+    return source
 
 
 class TestTushareSource:
@@ -19,20 +40,25 @@ class TestTushareSource:
             TushareSource(token=None)
 
     def test_get_stock_list_filters_historical_universe(self):
-        source = object.__new__(TushareSource)
-        source.pro = MagicMock()
-        source.pro.stock_basic.return_value = pd.DataFrame(
-            {
-                "ts_code": ["000001.SZ", "000002.SZ", "000003.SZ", "000004.SZ"],
-                "name": ["A", "B", "C", "D"],
-                "industry": ["银行", "银行", "银行", "银行"],
-                "market": ["主板", "主板", "主板", "主板"],
-                "exchange": ["SZSE", "SZSE", "SZSE", "SZSE"],
-                "curr_type": ["CNY", "CNY", "CNY", "CNY"],
-                "list_date": ["20190101", "20200102", "20180101", "20200103"],
-                "delist_date": [None, "20200103", "20200102", None],
-                "is_hs": ["N", "H", "S", "N"],
-            }
+        """Universe on trade_date: listed on/before, not yet delisted (boundary exclusive)."""
+        source = make_source_with_stock_basic(
+            pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000002.SZ", "000003.SZ", "000004.SZ"],
+                    "name": ["A", "B", "C", "D"],
+                    "industry": ["银行"] * 4,
+                    "market": ["主板"] * 4,
+                    "exchange": ["SZSE"] * 4,
+                    "curr_type": ["CNY"] * 4,
+                    # A: listed earlier, never delisted → in
+                    # B: lists exactly on trade_date → in
+                    # C: delists exactly on trade_date → out (boundary exclusive)
+                    # D: lists after trade_date → out
+                    "list_date": ["20190101", "20200102", "20180101", "20200103"],
+                    "delist_date": [None, "20200103", "20200102", None],
+                    "is_hs": ["N", "H", "S", "N"],
+                }
+            )
         )
 
         with patch.object(TushareSource._rate_limiter, "acquire", return_value=None):
@@ -47,28 +73,6 @@ class TestTushareSource:
             list_status="L,D",
             fields=source._STOCK_LIST_FIELDS,
         )
-
-    def test_get_stock_list_excludes_delist_date_boundary(self):
-        source = object.__new__(TushareSource)
-        source.pro = MagicMock()
-        source.pro.stock_basic.return_value = pd.DataFrame(
-            {
-                "ts_code": ["000002.SZ"],
-                "name": ["B"],
-                "industry": ["银行"],
-                "market": ["主板"],
-                "exchange": ["SZSE"],
-                "curr_type": ["CNY"],
-                "list_date": ["20200102"],
-                "delist_date": ["20200103"],
-                "is_hs": ["H"],
-            }
-        )
-
-        with patch.object(TushareSource._rate_limiter, "acquire", return_value=None):
-            df = source.get_stock_list(trade_date="20200103")
-
-        assert df.empty
 
 
 class TestTushareIntegration:
@@ -88,15 +92,14 @@ class TestTushareIntegration:
             pytest.skip("No recent trading day available from Tushare")
         self.trade_date = calendar["date"].iloc[-1]
 
+    # -- get_calendar -------------------------------------------------------
+
     def test_get_calendar(self):
-        """Test get_calendar returns well-formed data with all dates."""
+        """Full range: every day present, is_open flags well-formed, subsets consistent."""
         df = self.source.get_calendar("20260101", "20260401")
-        expected_columns = {"date", "is_open"}
         assert not df.empty, "get_calendar returned empty DataFrame"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
+        assert_has_columns(df, {"date", "is_open"})
+        assert df["date"].str.match(DATE_PATTERN).all(), "date not in YYYYMMDD format"
         assert (
             df["is_open"].isin(["Y", "N"]).all()
         ), "is_open should only contain Y or N"
@@ -104,434 +107,148 @@ class TestTushareIntegration:
         assert df["date"].iloc[0] == "20260101"
         assert df["date"].iloc[-1] == "20260401"
 
-    def test_get_calendar_is_open_true(self):
-        """Test get_calendar with is_open=True returns only trading days."""
-        df = self.source.get_calendar("20260101", "20260401", is_open=True)
-        assert not df.empty, "get_calendar returned empty DataFrame with is_open=True"
-        assert (df["is_open"] == "Y").all(), "is_open should be Y for all rows"
-        assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
-        assert len(df) == 57, f"Expected 57 trading days, got {len(df)}"
+        open_df = self.source.get_calendar("20260101", "20260401", is_open=True)
+        closed_df = self.source.get_calendar("20260101", "20260401", is_open=False)
+        assert (open_df["is_open"] == "Y").all()
+        assert (closed_df["is_open"] == "N").all()
+        assert len(open_df) == 57, f"Expected 57 trading days, got {len(open_df)}"
+        assert len(open_df) + len(closed_df) == len(df)
 
-    def test_get_calendar_is_open_false(self):
-        """Test get_calendar with is_open=False returns only non-trading days."""
-        df = self.source.get_calendar("20260101", "20260401", is_open=False)
-        assert (df["is_open"] == "N").all(), "is_open should be N for all rows"
-        assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
-        assert len(df) == 34, f"Expected 34 non-trading days, got {len(df)}"
+    # -- get_stock_list -----------------------------------------------------
 
     def test_get_stock_list(self):
-        """Test get_stock_list returns well-formed data for listed stocks."""
         df = self.source.get_stock_list(trade_date=self.trade_date)
-        expected_columns = {
-            "symbol",
-            "name",
-            "industry",
-            "board",
-            "exchange",
-            "curr_type",
-            "list_date",
-            "delist_date",
-            "is_hs",
-            "date",
-        }
-
         assert not df.empty
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert_has_columns(df, STOCK_LIST_COLUMNS)
         assert df["symbol"].is_unique
         assert (
             df["symbol"].str.match(r"^\d{6}\.(SH|SZ|BJ)$").all()
         ), "symbol format should be xxxxxx.SH/SZ/BJ"
-        assert (
-            df["date"].str.match(r"^\d{8}$").all()
-        ), "date should be in YYYYMMDD format"
+        assert df["date"].str.match(DATE_PATTERN).all(), "date not in YYYYMMDD format"
         assert df["is_hs"].isin(["Y", "N"]).all(), "is_hs should only contain Y or N"
 
-    def test_get_stock_list_by_single_symbol(self):
-        """Test get_stock_list with single symbol filter."""
+    def test_get_stock_list_by_symbol(self):
+        """Single symbol returns one row; comma-separated returns each requested symbol."""
         df = self.source.get_stock_list(trade_date=self.trade_date, symbol="000001.SZ")
-        assert (
-            not df.empty
-        ), "get_stock_list returned empty DataFrame for symbol=000001.SZ"
         assert len(df) == 1, f"Expected single stock, got {len(df)} rows"
         assert df.iloc[0]["symbol"] == "000001.SZ"
 
-    def test_get_stock_list_by_multiple_symbols(self):
-        """Test get_stock_list with comma-separated multiple symbols."""
         df = self.source.get_stock_list(
             trade_date=self.trade_date, symbol="000001.SZ,600000.SH"
         )
-        assert (
-            not df.empty
-        ), "get_stock_list returned empty DataFrame for multiple symbols"
-        assert set(df["symbol"].unique()) == {"000001.SZ", "600000.SH"}
+        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
 
     def test_get_stock_list_by_exchange(self):
-        """Test get_stock_list with single exchange filter (SSE)."""
+        """Single exchange filters strictly; multiple exchanges include each of them."""
         df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE")
-        assert not df.empty, "get_stock_list returned empty DataFrame for exchange=SSE"
-        assert (
-            df["exchange"].str.contains("SSE").all()
-        ), "Expected all stocks to be from SSE"
+        assert not df.empty, "empty DataFrame for exchange=SSE"
+        assert (df["exchange"] == "SSE").all(), "Expected all stocks to be from SSE"
 
-    def test_get_stock_list_by_multiple_exchanges(self):
-        """Test get_stock_list with comma-separated multiple exchanges."""
         df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE,SZE")
-        assert (
-            not df.empty
-        ), "get_stock_list returned empty DataFrame for multiple exchanges"
-        # Should contain both SSE and SZE stocks
-        has_sse = df["exchange"].str.contains("SSE").any()
-        has_sze = df["exchange"].str.contains("SZE").any()
-        assert has_sse and has_sze, "Expected both SSE and SZE in results"
+        assert set(df["exchange"]) == {"SSE", "SZE"}
 
     def test_get_stock_list_by_board(self):
-        """Test get_stock_list with single board filter (MB)."""
+        """Single board filters strictly; multiple boards include each of them."""
         df = self.source.get_stock_list(trade_date=self.trade_date, board="MB")
-        assert not df.empty, "get_stock_list returned empty DataFrame for board=MB"
-        assert df["board"].str.contains("MB").all(), "Expected all stocks to be from MB"
+        assert not df.empty, "empty DataFrame for board=MB"
+        assert (df["board"] == "MB").all(), "Expected all stocks to be from MB"
 
-    def test_get_stock_list_by_multiple_boards(self):
-        """Test get_stock_list with comma-separated multiple boards."""
         df = self.source.get_stock_list(trade_date=self.trade_date, board="MB,GEM,STAR")
-        assert (
-            not df.empty
-        ), "get_stock_list returned empty DataFrame for multiple boards"
-        has_mb = df["board"].str.contains("MB").any()
-        has_gem = df["board"].str.contains("GEM").any()
-        has_star = df["board"].str.contains("STAR").any()
-        assert has_mb and has_gem and has_star, "Expected MB, GEM and STAR in results"
+        assert set(df["board"]) == {"MB", "GEM", "STAR"}
 
     def test_get_stock_list_combined_filters(self):
-        """Test get_stock_list with multiple filters combined (AND semantics)."""
-        # Two params: board + exchange
-        df2 = self.source.get_stock_list(
+        """Multiple filters combine with AND semantics."""
+        df = self.source.get_stock_list(
             trade_date=self.trade_date, board="MB", exchange="SSE"
         )
-        assert (
-            not df2.empty
-        ), "get_stock_list returned empty DataFrame for board=MB,exchange=SSE"
-        assert df2["board"].str.contains("MB").all()
-        assert df2["exchange"].str.contains("SSE").all()
+        assert not df.empty, "empty DataFrame for board=MB,exchange=SSE"
+        assert (df["board"] == "MB").all()
+        assert (df["exchange"] == "SSE").all()
 
-        # Three params: symbol + board + exchange (all compatible: 000001.SZ is MB on SZE)
-        df3 = self.source.get_stock_list(
-            trade_date=self.trade_date,
-            symbol="000001.SZ",
-            board="MB",
-            exchange="SZE",
+        df = self.source.get_stock_list(
+            trade_date=self.trade_date, symbol="000001.SZ", board="MB", exchange="SZE"
         )
-        assert (
-            not df3.empty
-        ), "get_stock_list returned empty DataFrame for symbol+board+exchange"
-        assert "000001.SZ" in df3["symbol"].values
-        assert df3["board"].str.contains("MB").all()
-        assert df3["exchange"].str.contains("SZE").all()
+        assert list(df["symbol"]) == ["000001.SZ"]
+
+    # -- get_stock_snapshot -------------------------------------------------
 
     def test_get_stock_snapshot(self):
-        """Test get_stock_snapshot returns well-formed data for both markets."""
-        import re
-
-        expected_columns = {
-            "ets",
-            "lts",
-            "symbol",
-            "pre_close",
-            "open",
-            "high",
-            "low",
-            "last",
-            "volume",
-            "turnover",
-            "ap1",
-            "ap2",
-            "ap3",
-            "ap4",
-            "ap5",
-            "av1",
-            "av2",
-            "av3",
-            "av4",
-            "av5",
-            "bp1",
-            "bp2",
-            "bp3",
-            "bp4",
-            "bp5",
-            "bv1",
-            "bv2",
-            "bv3",
-            "bv4",
-            "bv5",
-        }
         df = self.source.get_stock_snapshot("000001.SZ,600000.SH")
         assert not df.empty, "get_stock_snapshot returned empty DataFrame"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert set(df["symbol"]) == {
-            "000001.SZ",
-            "600000.SH",
-        }, f"Unexpected symbols: {set(df['symbol'])}"
+        assert_has_columns(df, STOCK_SNAPSHOT_COLUMNS)
+        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
         assert (df["volume"] > 0).all(), "volume should be > 0"
-        ts_pattern = re.compile(r"^\d{8}T\d{9}$")
-        assert (
-            df["ets"].apply(lambda x: bool(ts_pattern.match(x))).all()
-        ), "ets format should be YYYYMMDDTHHMMSSsss"
-        assert (
-            df["lts"].apply(lambda x: bool(ts_pattern.match(x))).all()
-        ), "lts format should be YYYYMMDDTHHMMSSsss"
+        ts_pattern = re.compile(ETS_PATTERN)
+        for col in ("ets", "lts"):
+            assert (
+                df[col].apply(lambda x: bool(ts_pattern.match(x))).all()
+            ), f"{col} format should be YYYYMMDDTHHMMSSsss"
+
+    # -- get_stock_daily_bar --------------------------------------------------
 
     def test_get_stock_daily_bar(self):
-        """Test get_stock_daily_bar returns well-formed data for both markets."""
-        expected_columns = {
-            "symbol",
-            "date",
-            "open",
-            "close",
-            "high",
-            "low",
-            "pre_close",
-            "change",
-            "pct_change",
-            "volume",
-            "turnover",
-        }
-
+        """Well-formed bars for one symbol per market, and for a multi-symbol query."""
         for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_stock_daily_bar(symbol, "20260101", "20260401", trading_days=57)
+            df = self.source.get_stock_daily_bar(
+                symbol, "20260101", "20260401", trading_days=57
+            )
             assert not df.empty, f"{symbol} returned empty DataFrame"
-            assert expected_columns.issubset(
-                df.columns
-            ), f"Missing columns: {expected_columns - set(df.columns)}"
-            assert (df["high"] >= df["low"]).all(), "high < low found"
-            assert (df["high"] >= df["close"]).all(), "high < close found"
-            assert (df["low"] <= df["close"]).all(), "low > close found"
-            assert (df["volume"] > 0).all(), "non-positive volume found"
-            assert (df["turnover"] > 0).all(), "non-positive amount found"
-            assert df["date"].str.match(r"^\d{8}$").all(), "date not in YYYYMMDD format"
+            assert_has_columns(df, STOCK_DAILY_BAR_COLUMNS)
+            assert_daily_bar_sanity(df)
 
-    def test_get_stock_daily_bar_multiple_symbols(self):
-        """Test get_stock_daily_bar returns well-formed data for multiple symbols."""
-        expected_columns = {
-            "symbol",
-            "date",
-            "open",
-            "close",
-            "high",
-            "low",
-            "pre_close",
-            "change",
-            "pct_change",
-            "volume",
-            "turnover",
-        }
+        df = self.source.get_stock_daily_bar(
+            "000001.SZ,600000.SH", "20260101", "20260401", trading_days=57
+        )
+        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
+        assert_daily_bar_sanity(df)
 
-        symbols = "000001.SZ,600000.SH"
-        df = self.source.get_stock_daily_bar(symbols, "20260101", "20260401", trading_days=57)
-        assert (
-            not df.empty
-        ), f"get_stock_daily_bar returned empty DataFrame for {symbols}"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert set(df["symbol"].unique()) == {
-            "000001.SZ",
-            "600000.SH",
-        }, f"Expected symbols in result: {symbols}"
-        assert (df["high"] >= df["low"]).all(), "high < low found"
+    # -- get_index_list -------------------------------------------------------
 
-    def test_get_index_list_single_symbol(self):
-        """Test get_index_list with single symbol."""
-        expected_columns = {
-            "symbol",
-            "name",
-            "fullname",
-            "market",
-            "base_date",
-            "base_point",
-            "list_date",
-            "date",
-        }
-
+    def test_get_index_list_by_symbol(self):
+        """Single symbol returns one row; comma-separated returns each requested index."""
         df = self.source.get_index_list(symbol="000300.SH")
-        assert not df.empty, "get_index_list returned empty DataFrame for single symbol"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert_has_columns(df, INDEX_LIST_COLUMNS)
         assert len(df) == 1, f"Expected single index, got {len(df)} rows"
         assert df.iloc[0]["symbol"] == "000300.SH"
 
-    def test_get_index_list_multiple_symbols(self):
-        """Test get_index_list with comma-separated multiple symbols."""
-        expected_columns = {
-            "symbol",
-            "name",
-            "fullname",
-            "market",
-            "base_date",
-            "base_point",
-            "list_date",
-            "date",
-        }
+        df = self.source.get_index_list(symbol="000300.SH,000905.SH")
+        assert set(df["symbol"]) == {"000300.SH", "000905.SH"}
 
-        symbols = "000300.SH,000905.SH"
-        df = self.source.get_index_list(symbol=symbols)
-        assert not df.empty, f"get_index_list returned empty DataFrame for {symbols}"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert set(df["symbol"].unique()) == {
-            "000300.SH",
-            "000905.SH",
-        }, f"Expected symbols in result: {symbols}"
-
-    def test_get_index_list_single_market(self):
-        """Test get_index_list with single market."""
-        expected_columns = {
-            "symbol",
-            "name",
-            "fullname",
-            "market",
-            "base_date",
-            "base_point",
-            "list_date",
-            "date",
-        }
-
+    def test_get_index_list_by_market(self):
+        """Single market filters to that market; multiple markets include each of them."""
         df = self.source.get_index_list(market="SSE")
-        assert not df.empty, "get_index_list returned empty DataFrame for SSE market"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert not df.empty, "empty DataFrame for SSE market"
+        assert_has_columns(df, INDEX_LIST_COLUMNS)
         assert (
             df["symbol"].str.endswith(".SH").all()
         ), "Expected symbols to end with .SH for SSE market"
 
-    def test_get_index_list_multiple_markets(self):
-        """Test get_index_list with comma-separated multiple markets."""
-        expected_columns = {
-            "symbol",
-            "name",
-            "fullname",
-            "market",
-            "base_date",
-            "base_point",
-            "list_date",
-            "date",
-        }
-
-        markets = "SSE,SZE"
-        df = self.source.get_index_list(market=markets)
-        assert not df.empty, f"get_index_list returned empty DataFrame for {markets}"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
-        # Result should contain both SSE and SZE symbols
-        has_sh = df["symbol"].str.endswith(".SH").any()
-        has_sz = df["symbol"].str.endswith(".SZ").any()
-        assert (
-            has_sh and has_sz
-        ), f"Expected both .SH and .SZ symbols in result for markets: {markets}"
+        df = self.source.get_index_list(market="SSE,SZE")
+        assert df["symbol"].str.endswith(".SH").any(), "Expected .SH symbols"
+        assert df["symbol"].str.endswith(".SZ").any(), "Expected .SZ symbols"
 
     def test_get_index_list_symbol_ignores_market(self):
-        """Test that symbol takes precedence over market (market is ignored when symbol is provided)."""
-        expected_columns = {
-            "symbol",
-            "name",
-            "fullname",
-            "market",
-            "base_date",
-            "base_point",
-            "list_date",
-            "date",
-        }
-
-        # When symbol is provided, market should be ignored
         df = self.source.get_index_list(symbol="000300.SH", market="SZE")
-        assert (
-            not df.empty
-        ), "get_index_list returned empty DataFrame when symbol is provided"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert (
-            len(df) == 1
-        ), f"Expected single index when symbol provided, got {len(df)} rows"
-        assert (
-            df.iloc[0]["symbol"] == "000300.SH"
-        ), "Expected 000300.SH result when symbol is provided"
+        assert list(df["symbol"]) == ["000300.SH"]
 
     def test_get_index_list_without_params(self):
-        """Test get_index_list returns all indexes when no params provided."""
-        expected_columns = {
-            "symbol",
-            "name",
-            "fullname",
-            "market",
-            "base_date",
-            "base_point",
-            "list_date",
-            "date",
-        }
         df = self.source.get_index_list()
-        assert not df.empty, "get_index_list returned empty DataFrame with no params"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
+        assert not df.empty, "empty DataFrame with no params"
+        assert_has_columns(df, INDEX_LIST_COLUMNS)
+
+    # -- get_index_daily_bar --------------------------------------------------
 
     def test_get_index_daily_bar(self):
-        """Test get_index_daily_bar returns well-formed data for major indexes."""
-        expected_columns = {
-            "symbol",
-            "date",
-            "open",
-            "close",
-            "high",
-            "low",
-            "pre_close",
-            "change",
-            "pct_change",
-            "volume",
-            "turnover",
-        }
-
+        """Well-formed bars for major indexes (incl. CSI), and for a multi-symbol query."""
         for symbol in ("000300.SH", "000905.SH", "000852.SH", "932000.CSI"):
-            df = self.source.get_index_daily_bar(symbol, "20260101", "20260401", trading_days=57)
+            df = self.source.get_index_daily_bar(
+                symbol, "20260101", "20260401", trading_days=57
+            )
             assert not df.empty, f"{symbol} returned empty DataFrame"
-            assert expected_columns.issubset(
-                df.columns
-            ), f"Missing columns: {expected_columns - set(df.columns)}"
-            assert (df["high"] >= df["low"]).all(), "high < low found"
-            assert (df["high"] >= df["close"]).all(), "high < close found"
-            assert (df["low"] <= df["close"]).all(), "low > close found"
-            assert (df["volume"] > 0).all(), "non-positive volume found"
-            assert (df["turnover"] > 0).all(), "non-positive amount found"
+            assert_has_columns(df, INDEX_DAILY_BAR_COLUMNS)
+            assert_daily_bar_sanity(df)
 
-    def test_get_index_daily_bar_multiple_symbols(self):
-        """Test get_index_daily_bar returns well-formed data for multiple indexes."""
-        expected_columns = {
-            "symbol",
-            "date",
-            "open",
-            "close",
-            "high",
-            "low",
-            "pre_close",
-            "change",
-            "pct_change",
-            "volume",
-            "turnover",
-        }
-
-        symbols = "000300.SH,000905.SH"
-        df = self.source.get_index_daily_bar(symbols, "20260101", "20260401", trading_days=57)
-        assert not df.empty, f"{symbols} returned empty DataFrame"
-        assert expected_columns.issubset(
-            df.columns
-        ), f"Missing columns: {expected_columns - set(df.columns)}"
-        assert set(df["symbol"].unique()) == {
-            "000300.SH",
-            "000905.SH",
-        }, f"Expected symbols in result: {symbols}"
+        df = self.source.get_index_daily_bar(
+            "000300.SH,000905.SH", "20260101", "20260401", trading_days=57
+        )
+        assert set(df["symbol"]) == {"000300.SH", "000905.SH"}

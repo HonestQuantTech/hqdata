@@ -174,7 +174,10 @@ class TushareSource(BaseSource):
         # Map exchange to tushare native values (e.g. SZE → SZSE)
         ts_exchange = None
         if exchange:
-            ts_exchanges = [self._EXCHANGE_MAP.get(e.strip(), e.strip()) for e in exchange.split(",")]
+            ts_exchanges = [
+                self._EXCHANGE_MAP.get(e.strip(), e.strip())
+                for e in exchange.split(",")
+            ]
             ts_exchange = ",".join(ts_exchanges)
 
         # stock_basic API returns at most 6000 rows per call.
@@ -211,7 +214,9 @@ class TushareSource(BaseSource):
 
         df = df.sort_values("symbol")
         df["date"] = trade_date
-        df["exchange"] = df["exchange"].map(lambda x: self._REVERSE_EXCHANGE_MAP.get(x, x))
+        df["exchange"] = df["exchange"].map(
+            lambda x: self._REVERSE_EXCHANGE_MAP.get(x, x)
+        )
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
         df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
@@ -387,7 +392,9 @@ class TushareSource(BaseSource):
         # chunk_size = floor(5900 / trading_days), at least 1
         chunk_size = max(1, 5900 // trading_days)
 
-        chunks = [symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)]
+        chunks = [
+            symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
+        ]
         dfs = []
         for chunk in chunks:
             self._rate_limiter.acquire()
@@ -459,7 +466,9 @@ class TushareSource(BaseSource):
             for m in markets:
                 ts_market = self._MARKET_MAP.get(m, m)
                 self._rate_limiter.acquire()
-                df = self.pro.index_basic(market=ts_market, fields=self._INDEX_LIST_FIELDS)
+                df = self.pro.index_basic(
+                    market=ts_market, fields=self._INDEX_LIST_FIELDS
+                )
                 if df is not None and not df.empty:
                     dfs.append(df)
             df = pd.concat(dfs, ignore_index=True) if dfs else None
@@ -546,7 +555,9 @@ class TushareSource(BaseSource):
         dfs = []
         for s in symbols:
             self._rate_limiter.acquire()
-            d = self.pro.index_daily(ts_code=s, start_date=start_date, end_date=end_date)
+            d = self.pro.index_daily(
+                ts_code=s, start_date=start_date, end_date=end_date
+            )
             if d is None or d.empty:
                 continue
             if len(d) >= 8000:

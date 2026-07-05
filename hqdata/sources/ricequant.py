@@ -88,7 +88,9 @@ class RicequantSource(BaseSource):
             df["pre_close"] = float("nan")
         df["change"] = (df["close"] - df["pre_close"]).round(4)
         pct = (df["change"] / df["pre_close"]) * 100
-        df["pct_change"] = pct.replace([float("inf"), float("-inf")], float("nan")).round(4)
+        df["pct_change"] = pct.replace(
+            [float("inf"), float("-inf")], float("nan")
+        ).round(4)
         # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
         if "volume" in df.columns:
             df["volume"] = (df["volume"] / 100).astype("int64")
@@ -224,7 +226,10 @@ class RicequantSource(BaseSource):
         """Get basic info for stocks.
 
         Note:
-            - Only today's tradable (listed) stocks are returned.
+            - Returns the stock universe for the given snapshot date.
+            - Historical universe is reconstructed from listed_date / de_listed_date
+                boundaries instead of current status, because rqdatac may already mark
+                a stock as Delisted while it was still in the universe on trade_date.
 
         Args:
             trade_date: snapshot date (YYYYMMDD); injected by api layer
@@ -242,7 +247,22 @@ class RicequantSource(BaseSource):
         if df is None or df.empty:
             return self._empty_stock_list()
 
-        df = df[df["status"] == "Active"].reset_index(drop=True)
+        list_date = (
+            df["listed_date"].fillna("").astype(str).str.replace("-", "", regex=False)
+        )
+        delist_date = (
+            df["de_listed_date"]
+            .fillna("")
+            .astype(str)
+            .replace({"0000-00-00": "", "00000000": ""})
+            .str.replace("-", "", regex=False)
+        )
+        active_mask = (list_date <= trade_date) & (
+            (delist_date == "") | (trade_date < delist_date)
+        )
+        df = df[active_mask].reset_index(drop=True)
+        df["listed_date"] = list_date[active_mask].reset_index(drop=True)
+        df["de_listed_date"] = delist_date[active_mask].reset_index(drop=True)
 
         # Apply filters on raw rqdatac values (before mapping to hqdata conventions)
         if symbol:
@@ -274,12 +294,12 @@ class RicequantSource(BaseSource):
         result = pd.DataFrame(
             {
                 "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
-                "date": trade_date,
+                "date": [trade_date] * len(df),
                 "name": df["symbol"].tolist(),
                 "exchange": df["exchange"].map(self._REVERSE_EXCHANGE_MAP).tolist(),
                 "board": df["board_type"].map(self._REVERSE_BOARD_MAP).tolist(),
                 "industry": df["industry_name"].tolist(),
-                "curr_type": "CNY",
+                "curr_type": ["CNY"] * len(df),
                 "list_date": df["listed_date"].tolist(),
                 "delist_date": df["de_listed_date"].tolist(),
                 "is_hs": df["order_book_id"]
@@ -551,7 +571,9 @@ class RicequantSource(BaseSource):
         # UserWarning 或 Exception（invalid order_book_id）。两种情况均返回空。
         try:
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
+                warnings.filterwarnings(
+                    "ignore", category=UserWarning, module="rqdatac.validators"
+                )
                 df = rq.get_price(
                     rq_symbols,
                     start_date=start_date,
@@ -595,7 +617,9 @@ class RicequantSource(BaseSource):
         # UserWarning 或 Exception（invalid order_book_id）。两种情况均返回空。
         try:
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning, module="rqdatac.validators")
+                warnings.filterwarnings(
+                    "ignore", category=UserWarning, module="rqdatac.validators"
+                )
                 df = rq.get_price(
                     rq_symbols,
                     start_date=start_date,

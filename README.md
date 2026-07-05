@@ -112,6 +112,32 @@ hqdata [--source SOURCE] [--output DIR] COMMAND [options]
 
 使用子命令和 `--help` 可查看具体用法
 
+已落盘数据也可以直接做对比，当前已支持交易日历对比：
+
+```bash
+hqdata --output ~/.hqdata compare calendar
+```
+
+该命令会读取 `~/.hqdata/tushare/calendar.csv` 和 `~/.hqdata/ricequant/calendar.csv`。
+
+- 若无差异，命令返回成功
+- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/calendar_diff.csv`
+
+股票列表也可以直接对比：
+
+```bash
+hqdata --output ~/.hqdata compare stock-list
+```
+
+该命令会读取 `~/.hqdata/tushare/stock_list/*.csv` 和 `~/.hqdata/ricequant/stock_list/*.csv`。
+
+- 若无差异，命令返回成功
+- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/stock_list_diff.csv`
+- 校验规则：
+  - 文件内 `date` 列必须与文件名一致，否则直接报错
+  - 若某一侧存在非交易日（按该源 calendar.csv 判定）的文件，报 `file_not_trading_day_*` 差异
+  - `delist_date` 晚于快照日（尚未生效的退市日）视同空值，不算差异——两家数据源填写时点不同
+
 ## 测试
 
 ```bash

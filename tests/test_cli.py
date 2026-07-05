@@ -1,13 +1,15 @@
 """Unit tests for hqdata CLI (hqdata/cli.py)"""
 
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from types import SimpleNamespace
+from unittest.mock import call, patch
 
 import pandas as pd
 import pytest
 from click.testing import CliRunner
 
 from hqdata.cli import cli
+from tests.helpers import make_calendar
 
 # ---------------------------------------------------------------------------
 # fixtures / helpers
@@ -18,13 +20,13 @@ STOCK_LIST_DF = pd.DataFrame(
         "symbol": ["600000.SH", "000001.SZ"],
         "date": ["20260101", "20260101"],
         "name": ["浦发银行", "平安银行"],
-        "exchange": ["SSE", "SZSE"],
+        "exchange": ["SSE", "SZE"],
         "board": ["MB", "MB"],
         "industry": ["银行", "银行"],
         "curr_type": ["CNY", "CNY"],
         "list_date": ["19991110", "19910403"],
-        "delist_date": [None, None],
-        "is_hs": [False, True],
+        "delist_date": ["", ""],
+        "is_hs": ["N", "Y"],
     }
 )
 
@@ -71,7 +73,16 @@ MINUTE_BAR_DF = pd.DataFrame(
     }
 )
 
-CALENDAR_DF = pd.DataFrame({"date": ["20260101", "20260102"], "is_open": ["Y", "Y"]})
+
+def _stock_list_stub(trade_date):
+    """Mimic real sources: stamp the requested trade_date into the date column."""
+    return STOCK_LIST_DF.assign(date=trade_date)
+
+
+def assert_success(result):
+    assert (
+        result.exit_code == 0
+    ), f"CLI failed (exit {result.exit_code}):\n{result.output}"
 
 
 @pytest.fixture
@@ -79,8 +90,47 @@ def runner():
     return CliRunner()
 
 
+@pytest.fixture
+def api():
+    """Patch every hqdata API entry point the CLI touches, with workable defaults.
+
+    The default world is a single trading day 20260102. Tests override the
+    returned mocks' return_value/side_effect where they need something else.
+    """
+    with (
+        patch("hqdata.cli.hqdata.init_source") as init_source,
+        patch("hqdata.cli.hqdata.get_current_trading_day") as current_trading_day,
+        patch("hqdata.cli.hqdata.get_calendar") as calendar,
+        patch("hqdata.cli.hqdata.get_stock_list") as stock_list,
+        patch("hqdata.cli.hqdata.get_stock_minute_bar") as stock_minute_bar,
+        patch("hqdata.cli.hqdata.get_stock_daily_bar") as stock_daily_bar,
+        patch("hqdata.cli.hqdata.get_index_list") as index_list,
+        patch("hqdata.cli.hqdata.get_index_minute_bar") as index_minute_bar,
+        patch("hqdata.cli.hqdata.get_index_daily_bar") as index_daily_bar,
+    ):
+        current_trading_day.return_value = "20260102"
+        calendar.return_value = make_calendar("20260102")
+        stock_list.side_effect = _stock_list_stub
+        stock_minute_bar.return_value = MINUTE_BAR_DF
+        stock_daily_bar.return_value = DAILY_BAR_DF
+        index_list.return_value = INDEX_LIST_DF
+        index_minute_bar.return_value = MINUTE_BAR_DF
+        index_daily_bar.return_value = DAILY_BAR_DF
+        yield SimpleNamespace(
+            init_source=init_source,
+            current_trading_day=current_trading_day,
+            calendar=calendar,
+            stock_list=stock_list,
+            stock_minute_bar=stock_minute_bar,
+            stock_daily_bar=stock_daily_bar,
+            index_list=index_list,
+            index_minute_bar=index_minute_bar,
+            index_daily_bar=index_daily_bar,
+        )
+
+
 # ---------------------------------------------------------------------------
-# --source validation
+# --source validation / CLI option defaults
 # ---------------------------------------------------------------------------
 
 
@@ -96,22 +146,11 @@ class TestSourceValidation:
         assert "Invalid" in result.output
 
 
-# ---------------------------------------------------------------------------
-# CLI option defaults
-# ---------------------------------------------------------------------------
-
-
 class TestCLIDefaults:
-    def test_default_source_is_tushare(self, runner):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-        ):
-            result = runner.invoke(cli, ["stock-list"])
-        assert result.exit_code == 0
+    def test_default_source_is_tushare(self, runner, api, tmp_path):
+        result = runner.invoke(cli, ["--output", str(tmp_path), "stock-list"])
+        assert_success(result)
+        assert (tmp_path / "tushare" / "stock_list" / "20260102.csv").exists()
 
     def test_stock_minute_invalid_frequency(self, runner):
         result = runner.invoke(cli, ["stock-minute", "--frequency", "2m"])
@@ -121,359 +160,18 @@ class TestCLIDefaults:
         result = runner.invoke(cli, ["calendar"])
         assert result.exit_code != 0
 
-    def test_index_list_default_market(self, runner, tmp_path):
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF) as mock_list,
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-        ):
-            runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
-        mock_list.assert_called_once_with(market="SSE,SZE")
+    def test_index_list_default_market(self, runner, api, tmp_path):
+        result = runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
+        assert_success(result)
+        api.index_list.assert_called_once_with(market="SSE,SZE")
 
-
-# ---------------------------------------------------------------------------
-# stock-list (no date args — backward compat)
-# ---------------------------------------------------------------------------
-
-
-class TestFetchStockList:
-    def test_writes_today_csv_no_args(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-        ):
-            result = runner.invoke(cli, ["--output", str(tmp_path), "stock-list"])
-
-        assert result.exit_code == 0
-        out_file = tmp_path / "tushare" / "stock_list" / "20260102.csv"
-        assert out_file.exists()
-        df = pd.read_csv(out_file)
-        assert list(df.columns) == list(STOCK_LIST_DF.columns)
-
-    def test_csv_encoding_utf8(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-        ):
-            runner.invoke(cli, ["--output", str(tmp_path), "stock-list"])
-
-        out_file = tmp_path / "tushare" / "stock_list" / "20260102.csv"
-        content = out_file.read_bytes()
-        content.decode("utf-8")  # should not raise
-
-
-# ---------------------------------------------------------------------------
-# stock-list date range
-# ---------------------------------------------------------------------------
-
-
-class TestStockListDateRange:
-    def test_writes_csv_per_trading_day(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260514", "20260515"], "is_open": ["Y", "Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260518"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--source", "ricequant", "--output", str(tmp_path), "stock-list",
-                 "--start", "20260514", "--end", "20260515"],
-            )
-
-        assert result.exit_code == 0
-        assert (tmp_path / "ricequant" / "stock_list" / "20260514.csv").exists()
-        assert (tmp_path / "ricequant" / "stock_list" / "20260515.csv").exists()
-
-    def test_trade_date_passed_per_day(self, runner, tmp_path):
-        """get_stock_list should be called with each trading day's trade_date."""
-        calendar = pd.DataFrame({"date": ["20260514", "20260515"], "is_open": ["Y", "Y"]})
-        mock_list = MagicMock(return_value=STOCK_LIST_DF)
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260518"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", mock_list),
-        ):
-            runner.invoke(
-                cli,
-                ["--source", "ricequant", "--output", str(tmp_path), "stock-list",
-                 "--start", "20260514", "--end", "20260515"],
-            )
-
-        assert mock_list.call_count == 2
-        assert mock_list.call_args_list == [
-            call(trade_date="20260514"),
-            call(trade_date="20260515"),
-        ]
-
-    def test_existing_file_is_skipped(self, runner, tmp_path):
-        """A CSV that already exists should not trigger another API call."""
-        calendar = pd.DataFrame({"date": ["20260514", "20260515"], "is_open": ["Y", "Y"]})
-        out_dir = tmp_path / "ricequant" / "stock_list"
-        out_dir.mkdir(parents=True)
-        (out_dir / "20260514.csv").write_text("placeholder")
-
-        mock_list = MagicMock(return_value=STOCK_LIST_DF)
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260518"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", mock_list),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--source", "ricequant", "--output", str(tmp_path), "stock-list",
-                 "--start", "20260514", "--end", "20260515"],
-            )
-
-        assert result.exit_code == 0
-        assert mock_list.call_count == 1
-        assert mock_list.call_args_list == [call(trade_date="20260515")]
-
-    def test_tushare_history_writes_csv_per_trading_day(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260514", "20260515"], "is_open": ["Y", "Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260518"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--source", "tushare", "--output", str(tmp_path), "stock-list",
-                 "--start", "20260514", "--end", "20260515"],
-            )
-
-        assert result.exit_code == 0
-        assert (tmp_path / "tushare" / "stock_list" / "20260514.csv").exists()
-        assert (tmp_path / "tushare" / "stock_list" / "20260515.csv").exists()
-
-    def test_tushare_today_still_works(self, runner, tmp_path):
-        """tushare without --start/--end (defaulting to today) should work fine."""
-        calendar = pd.DataFrame({"date": ["20260518"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260518"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-        ):
-            result = runner.invoke(cli, ["--source", "tushare", "--output", str(tmp_path), "stock-list"])
-
-        assert result.exit_code == 0
-        assert (tmp_path / "tushare" / "stock_list" / "20260518.csv").exists()
-
-
-# ---------------------------------------------------------------------------
-# stock-daily
-# ---------------------------------------------------------------------------
-
-
-class TestFetchStockDaily:
-    def test_writes_csv_per_date(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_stock_daily_bar", return_value=DAILY_BAR_DF),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "stock-daily", "--start", "20260101", "--end", "20260103"],
-            )
-
-        assert result.exit_code == 0
-        out_file = tmp_path / "tushare" / "stock_daily" / "20260102.csv"
-        assert out_file.exists()
-        df = pd.read_csv(out_file)
-        assert "symbol" in df.columns
-        assert df["symbol"].iloc[0] == "600000.SH"
-
-    def test_uses_trade_date_stock_pool_per_day(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102", "20260103"], "is_open": ["Y", "Y"]})
-        stock_list_day_1 = pd.DataFrame({"symbol": ["600000.SH"], "date": ["20260102"]})
-        stock_list_day_2 = pd.DataFrame({"symbol": ["000001.SZ"], "date": ["20260103"]})
-        mock_list = MagicMock(side_effect=[stock_list_day_1, stock_list_day_2])
-        mock_bar = MagicMock(return_value=DAILY_BAR_DF)
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", mock_list),
-            patch("hqdata.cli.hqdata.get_stock_daily_bar", mock_bar),
-        ):
-            runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "stock-daily", "--start", "20260101", "--end", "20260103"],
-            )
-
-        assert mock_list.call_args_list == [
-            call(trade_date="20260102"),
-            call(trade_date="20260103"),
-        ]
-        assert mock_bar.call_count == 2
-        assert mock_bar.call_args_list[0] == call("600000.SH", start_date="20260102", end_date="20260102")
-        assert mock_bar.call_args_list[1] == call("000001.SZ", start_date="20260103", end_date="20260103")
-
-    def test_no_data_no_file(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        empty_bar = pd.DataFrame(
-            columns=["symbol", "date", "pre_close", "open", "high", "low", "close",
-                     "volume", "turnover", "change", "pct_change"]
-        )
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_stock_daily_bar", return_value=empty_bar),
-        ):
-            runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "stock-daily", "--start", "20260101", "--end", "20260103"],
-            )
-
-        out_dir = tmp_path / "tushare" / "stock_daily"
-        assert not out_dir.exists() or not any(out_dir.iterdir())
-
-    def test_batch_error_no_crash(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_stock_daily_bar", side_effect=RuntimeError("API error")),
-        ):
-            runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "stock-daily", "--start", "20260101", "--end", "20260103"],
-            )
-
-        out_dir = tmp_path / "tushare" / "stock_daily"
-        assert not any(out_dir.glob("*.csv")) if out_dir.exists() else True
-
-
-# ---------------------------------------------------------------------------
-# stock-minute
-# ---------------------------------------------------------------------------
-
-
-class TestFetchStockMinute:
-    def test_writes_csv_per_date(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_stock_minute_bar", return_value=MINUTE_BAR_DF),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "stock-minute", "--start", "20260401", "--end", "20260407",
-                 "--frequency", "5m"],
-            )
-
-        assert result.exit_code == 0
-        out_file = tmp_path / "tushare" / "stock_minute" / "20260102.csv"
-        assert out_file.exists()
-
-    def test_frequency_passed(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260401", "20260402"], "is_open": ["Y", "Y"]})
-        mock_bar = MagicMock(return_value=MINUTE_BAR_DF)
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_stock_minute_bar", mock_bar),
-        ):
-            runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "stock-minute", "--start", "20260401", "--end", "20260407",
-                 "--frequency", "15m"],
-            )
-
-        assert len(mock_bar.call_args_list) == 2
-        for expected_day, c in zip(["20260401", "20260402"], mock_bar.call_args_list):
-            call_args = c[0]
-            call_kwargs = c[1]
-            assert call_args[1] == "15m"
-            assert call_kwargs == {"start_date": expected_day, "end_date": expected_day}
-
-
-# ---------------------------------------------------------------------------
-# index-daily / index-minute
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexDaily:
-    def test_writes_csv_per_date(self, runner, tmp_path):
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF),
-            patch("hqdata.cli.hqdata.get_index_daily_bar", return_value=DAILY_BAR_DF),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "index-daily", "--start", "20260101", "--end", "20260103"],
-            )
-
-        assert result.exit_code == 0
-        out_file = tmp_path / "tushare" / "index_daily" / "20260102.csv"
-        assert out_file.exists()
-
-
-class TestFetchIndexMinute:
-    def test_writes_csv_per_date(self, runner, tmp_path):
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF),
-            patch("hqdata.cli.hqdata.get_index_minute_bar", return_value=MINUTE_BAR_DF),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "index-minute", "--start", "20260401", "--end", "20260407",
-                 "--frequency", "1m"],
-            )
-
-        assert result.exit_code == 0
-        out_file = tmp_path / "tushare" / "index_minute" / "20260102.csv"
-        assert out_file.exists()
-
-
-# ---------------------------------------------------------------------------
-# index-list
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexList:
-    def test_writes_today_csv(self, runner, tmp_path):
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_index_list", return_value=INDEX_LIST_DF),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-        ):
-            result = runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
-
-        assert result.exit_code == 0
-        out_file = tmp_path / "tushare" / "index_list" / "20260102.csv"
-        assert out_file.exists()
-
-    def test_market_passed_to_api(self, runner, tmp_path):
-        mock_list = MagicMock(return_value=INDEX_LIST_DF)
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_index_list", mock_list),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-        ):
-            runner.invoke(cli, ["--output", str(tmp_path), "index-list", "--market", "CSI"])
-
-        mock_list.assert_called_once_with(market="CSI")
+    def test_default_output_expanduser(self, runner, api):
+        """Default output ~/.hqdata must be expanded (not literal ~) in echoed paths."""
+        with patch("hqdata.cli._write_csv"):  # keep the real ~/.hqdata untouched
+            result = runner.invoke(cli, ["stock-list"])
+        assert_success(result)
+        assert "~" not in result.output
+        assert str(Path.home()) in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -482,74 +180,546 @@ class TestFetchIndexList:
 
 
 class TestFetchCalendar:
-    def test_writes_calendar_csv_no_subdir(self, runner, tmp_path):
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=CALENDAR_DF),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "calendar", "--start", "20260101", "--end", "20260131"],
-            )
-
-        assert result.exit_code == 0
+    def test_writes_calendar_csv_no_subdir(self, runner, api, tmp_path):
+        api.calendar.return_value = make_calendar("20260102", closed=("20260101",))
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "calendar",
+                "--start",
+                "20260101",
+                "--end",
+                "20260131",
+            ],
+        )
+        assert_success(result)
         out_file = tmp_path / "tushare" / "calendar.csv"
         assert out_file.exists()
         assert not (tmp_path / "tushare" / "calendar").is_dir()
-
-    def test_calendar_csv_content(self, runner, tmp_path):
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=CALENDAR_DF),
-        ):
-            runner.invoke(
-                cli,
-                ["--output", str(tmp_path), "calendar", "--start", "20260101", "--end", "20260131"],
-            )
-
-        df = pd.read_csv(tmp_path / "tushare" / "calendar.csv")
+        df = pd.read_csv(out_file, dtype=str)
         assert list(df.columns) == ["date", "is_open"]
-        assert len(df) == 2
+        assert list(df["date"]) == ["20260101", "20260102"]
+        assert list(df["is_open"]) == ["N", "Y"]
 
 
 # ---------------------------------------------------------------------------
-# multi-source integration
+# stock-list
+# ---------------------------------------------------------------------------
+
+
+class TestFetchStockList:
+    def test_writes_today_csv_no_args(self, runner, api, tmp_path):
+        result = runner.invoke(cli, ["--output", str(tmp_path), "stock-list"])
+        assert_success(result)
+        out_file = tmp_path / "tushare" / "stock_list" / "20260102.csv"
+        assert out_file.exists()
+        out_file.read_bytes().decode("utf-8")  # must be valid utf-8
+        df = pd.read_csv(out_file)
+        assert list(df.columns) == list(STOCK_LIST_DF.columns)
+
+    def test_date_range_writes_csv_per_trading_day(self, runner, api, tmp_path):
+        """One CSV per trading day; get_stock_list called with each day's trade_date."""
+        api.current_trading_day.return_value = "20260518"
+        api.calendar.return_value = make_calendar("20260514", "20260515")
+        result = runner.invoke(
+            cli,
+            [
+                "--source",
+                "ricequant",
+                "--output",
+                str(tmp_path),
+                "stock-list",
+                "--start",
+                "20260514",
+                "--end",
+                "20260515",
+            ],
+        )
+        assert_success(result)
+        assert (tmp_path / "ricequant" / "stock_list" / "20260514.csv").exists()
+        assert (tmp_path / "ricequant" / "stock_list" / "20260515.csv").exists()
+        assert api.stock_list.call_args_list == [
+            call(trade_date="20260514"),
+            call(trade_date="20260515"),
+        ]
+
+    def test_tushare_history_also_supported(self, runner, api, tmp_path):
+        """tushare historical stock lists work since the unified refactor."""
+        api.current_trading_day.return_value = "20260518"
+        api.calendar.return_value = make_calendar("20260514", "20260515")
+        result = runner.invoke(
+            cli,
+            [
+                "--source",
+                "tushare",
+                "--output",
+                str(tmp_path),
+                "stock-list",
+                "--start",
+                "20260514",
+                "--end",
+                "20260515",
+            ],
+        )
+        assert_success(result)
+        assert (tmp_path / "tushare" / "stock_list" / "20260514.csv").exists()
+        assert (tmp_path / "tushare" / "stock_list" / "20260515.csv").exists()
+
+    def test_existing_file_is_skipped(self, runner, api, tmp_path):
+        """A CSV that already exists should not trigger another API call."""
+        api.current_trading_day.return_value = "20260518"
+        api.calendar.return_value = make_calendar("20260514", "20260515")
+        out_dir = tmp_path / "ricequant" / "stock_list"
+        out_dir.mkdir(parents=True)
+        (out_dir / "20260514.csv").write_text("placeholder")
+
+        result = runner.invoke(
+            cli,
+            [
+                "--source",
+                "ricequant",
+                "--output",
+                str(tmp_path),
+                "stock-list",
+                "--start",
+                "20260514",
+                "--end",
+                "20260515",
+            ],
+        )
+        assert_success(result)
+        assert api.stock_list.call_args_list == [call(trade_date="20260515")]
+
+    def test_refuses_to_write_when_date_column_mismatches(self, runner, api, tmp_path):
+        """A source returning rows with a wrong date column must not be written."""
+        api.stock_list.side_effect = None
+        api.stock_list.return_value = STOCK_LIST_DF.assign(date="20260101")
+        result = runner.invoke(cli, ["--output", str(tmp_path), "stock-list"])
+        assert result.exit_code != 0
+        assert "date column contains" in result.output
+        assert not (tmp_path / "tushare" / "stock_list" / "20260102.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# stock-minute
+# ---------------------------------------------------------------------------
+
+
+class TestFetchStockMinute:
+    def test_writes_csv_per_date_and_passes_frequency(self, runner, api, tmp_path):
+        api.calendar.return_value = make_calendar("20260401", "20260402")
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-minute",
+                "--start",
+                "20260401",
+                "--end",
+                "20260407",
+                "--frequency",
+                "15m",
+            ],
+        )
+        assert_success(result)
+        # Output file is named after the bar data's date column
+        assert (tmp_path / "tushare" / "stock_minute" / "20260102.csv").exists()
+        assert len(api.stock_minute_bar.call_args_list) == 2
+        for expected_day, c in zip(
+            ["20260401", "20260402"], api.stock_minute_bar.call_args_list
+        ):
+            assert c.args[1] == "15m"
+            assert c.kwargs == {"start_date": expected_day, "end_date": expected_day}
+
+
+# ---------------------------------------------------------------------------
+# stock-daily
+# ---------------------------------------------------------------------------
+
+
+class TestFetchStockDaily:
+    def test_writes_csv_per_date(self, runner, api, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        out_file = tmp_path / "tushare" / "stock_daily" / "20260102.csv"
+        assert out_file.exists()
+        df = pd.read_csv(out_file)
+        assert df["symbol"].iloc[0] == "600000.SH"
+
+    def test_uses_trade_date_stock_pool_per_day(self, runner, api, tmp_path):
+        """Each trading day's bars are fetched for that day's stock universe."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        api.stock_list.side_effect = [
+            pd.DataFrame({"symbol": ["600000.SH"], "date": ["20260102"]}),
+            pd.DataFrame({"symbol": ["000001.SZ"], "date": ["20260103"]}),
+        ]
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert api.stock_list.call_args_list == [
+            call(trade_date="20260102"),
+            call(trade_date="20260103"),
+        ]
+        assert api.stock_daily_bar.call_args_list == [
+            call("600000.SH", start_date="20260102", end_date="20260102"),
+            call("000001.SZ", start_date="20260103", end_date="20260103"),
+        ]
+
+    def test_no_data_no_file(self, runner, api, tmp_path):
+        api.stock_daily_bar.return_value = DAILY_BAR_DF.iloc[0:0]
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert "No data fetched" in result.output
+        out_dir = tmp_path / "tushare" / "stock_daily"
+        assert not out_dir.exists() or not any(out_dir.iterdir())
+
+    def test_batch_error_reported_and_nothing_written(self, runner, api, tmp_path):
+        api.stock_daily_bar.side_effect = RuntimeError("API error")
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)  # the CLI reports the error but does not crash
+        assert "ERROR" in result.output
+        out_dir = tmp_path / "tushare" / "stock_daily"
+        assert not out_dir.exists() or not any(out_dir.glob("*.csv"))
+
+
+# ---------------------------------------------------------------------------
+# index-list
+# ---------------------------------------------------------------------------
+
+
+class TestFetchIndexList:
+    def test_writes_today_csv(self, runner, api, tmp_path):
+        result = runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
+        assert_success(result)
+        assert (tmp_path / "tushare" / "index_list" / "20260102.csv").exists()
+
+    def test_market_passed_to_api(self, runner, api, tmp_path):
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "index-list", "--market", "CSI"]
+        )
+        assert_success(result)
+        api.index_list.assert_called_once_with(market="CSI")
+
+
+# ---------------------------------------------------------------------------
+# index-minute
+# ---------------------------------------------------------------------------
+
+
+class TestFetchIndexMinute:
+    def test_writes_csv_per_date(self, runner, api, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "index-minute",
+                "--start",
+                "20260401",
+                "--end",
+                "20260407",
+                "--frequency",
+                "1m",
+            ],
+        )
+        assert_success(result)
+        assert (tmp_path / "tushare" / "index_minute" / "20260102.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# index-daily
+# ---------------------------------------------------------------------------
+
+
+class TestFetchIndexDaily:
+    def test_writes_csv_per_date(self, runner, api, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "index-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert (tmp_path / "tushare" / "index_daily" / "20260102.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# multi-source
 # ---------------------------------------------------------------------------
 
 
 class TestMultiSource:
-    def test_multi_source_each_written(self, runner, tmp_path):
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source") as mock_init,
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-        ):
-            result = runner.invoke(
-                cli,
-                ["--source", "tushare,ricequant", "--output", str(tmp_path), "stock-list"],
-            )
-
-        assert result.exit_code == 0
-        assert mock_init.call_count == 2
-        assert mock_init.call_args_list == [call("tushare"), call("ricequant")]
+    def test_multi_source_each_written(self, runner, api, tmp_path):
+        result = runner.invoke(
+            cli,
+            ["--source", "tushare,ricequant", "--output", str(tmp_path), "stock-list"],
+        )
+        assert_success(result)
+        assert api.init_source.call_args_list == [call("tushare"), call("ricequant")]
         assert (tmp_path / "tushare" / "stock_list" / "20260102.csv").exists()
         assert (tmp_path / "ricequant" / "stock_list" / "20260102.csv").exists()
 
-    def test_default_output_expanduser(self, runner):
-        """Verify that default output ~/.hqdata is expanded (not literal ~) in the echoed path."""
-        calendar = pd.DataFrame({"date": ["20260102"], "is_open": ["Y"]})
-        with (
-            patch("hqdata.cli.hqdata.init_source"),
-            patch("hqdata.cli.hqdata.get_stock_list", return_value=STOCK_LIST_DF),
-            patch("hqdata.cli.hqdata.get_current_trading_day", return_value="20260102"),
-            patch("hqdata.cli.hqdata.get_calendar", return_value=calendar),
-            patch("hqdata.cli._write_csv"),
-        ):
-            result = runner.invoke(cli, ["stock-list"])
 
-        # The echoed "Done. Written to ..." path must not contain a literal ~
-        assert "~" not in result.output
-        # Should contain the real expanded home path
-        assert str(Path.home()) in result.output
+# ---------------------------------------------------------------------------
+# compare — file-based, no API mocks
+# ---------------------------------------------------------------------------
+
+_STOCK_ROW = {
+    "symbol": "000001.SZ",
+    "name": "平安银行",
+    "exchange": "SZE",
+    "board": "MB",
+    "industry": "银行",
+    "curr_type": "CNY",
+    "list_date": "19910403",
+    "delist_date": "",
+    "is_hs": "Y",
+}
+
+_STOCK_COLUMNS = list(STOCK_LIST_DF.columns)
+
+
+def write_calendar_csv(output_root, source, calendar_df):
+    path = output_root / source / "calendar.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    calendar_df.to_csv(path, index=False)
+
+
+def write_stock_list_csv(output_root, source, date, rows=({},), filename=None):
+    """Write a stock_list CSV; each row spec is merged over a valid default row."""
+    frame = pd.DataFrame([{**_STOCK_ROW, "date": date, **spec} for spec in rows])
+    path = output_root / source / "stock_list" / (filename or f"{date}.csv")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame[_STOCK_COLUMNS].to_csv(path, index=False)
+
+
+class TestCompareCalendar:
+    def test_no_diff(self, runner, tmp_path):
+        calendar = make_calendar("20260102", closed=("20260101",))
+        write_calendar_csv(tmp_path, "tushare", calendar)
+        write_calendar_csv(tmp_path, "ricequant", calendar)
+
+        result = runner.invoke(cli, ["--output", str(tmp_path), "compare", "calendar"])
+
+        assert_success(result)
+        assert "No differences found" in result.output
+        assert not (tmp_path / "compare" / "calendar_diff.csv").exists()
+
+    def test_writes_diff_report(self, runner, tmp_path):
+        write_calendar_csv(
+            tmp_path, "tushare", make_calendar("20260102", closed=("20260101",))
+        )
+        write_calendar_csv(tmp_path, "ricequant", make_calendar("20260101", "20260103"))
+
+        result = runner.invoke(cli, ["--output", str(tmp_path), "compare", "calendar"])
+
+        assert result.exit_code != 0
+        assert "Differences found" in result.output
+        report = pd.read_csv(tmp_path / "compare" / "calendar_diff.csv", dtype=str)
+        assert list(report["status"]) == [
+            "mismatch_is_open",  # 20260101: N vs Y
+            "only_tushare",  # 20260102
+            "only_ricequant",  # 20260103
+        ]
+
+    def test_missing_file(self, runner, tmp_path):
+        write_calendar_csv(tmp_path, "tushare", make_calendar("20260102"))
+
+        result = runner.invoke(cli, ["--output", str(tmp_path), "compare", "calendar"])
+
+        assert result.exit_code != 0
+        assert "Missing calendar file" in result.output
+
+
+class TestCompareStockList:
+    def test_no_diff_after_normalization(self, runner, tmp_path):
+        """Source-native spellings (BJSE, cny, dashed dates, 0000-00-00) must not diff."""
+        write_stock_list_csv(
+            tmp_path,
+            "tushare",
+            "20260105",
+            rows=[
+                {
+                    "symbol": "920000.BJ",
+                    "name": "样本退",
+                    "exchange": "BSE",
+                    "board": "BSE",
+                    "is_hs": "N",
+                }
+            ],
+        )
+        write_stock_list_csv(
+            tmp_path,
+            "ricequant",
+            "20260105",
+            rows=[
+                {
+                    "symbol": "920000.BJ",
+                    "name": "*ST样本",
+                    "exchange": "BJSE",
+                    "board": "BSE",
+                    "industry": "货币金融服务",
+                    "curr_type": "cny",
+                    "list_date": "1991-04-03",
+                    "delist_date": "0000-00-00",
+                }
+            ],
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert_success(result)
+        assert "No differences found" in result.output
+        assert not (tmp_path / "compare" / "stock_list_diff.csv").exists()
+
+    def test_writes_diff_report(self, runner, tmp_path):
+        write_stock_list_csv(
+            tmp_path,
+            "tushare",
+            "20260105",
+            rows=[
+                {},
+                {
+                    "symbol": "000002.SZ",
+                    "name": "万科A",
+                    "industry": "地产",
+                    "is_hs": "N",
+                },
+            ],
+        )
+        write_stock_list_csv(
+            tmp_path,
+            "ricequant",
+            "20260105",
+            rows=[{"board": "GEM", "delist_date": "2026-01-05"}],
+        )
+        write_stock_list_csv(
+            tmp_path,
+            "tushare",
+            "20260106",
+            rows=[{"symbol": "000003.SZ", "name": "样本股"}],
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert result.exit_code != 0
+        assert "Differences found" in result.output
+        report = pd.read_csv(tmp_path / "compare" / "stock_list_diff.csv", dtype=str)
+        assert set(report["status"]) == {
+            "file_only_tushare",  # 20260106 missing on ricequant side
+            "symbol_only_tushare",  # 000002.SZ
+            "value_mismatch",  # 000001.SZ board + effective delist_date
+        }
+        mismatches = report[report["status"] == "value_mismatch"]
+        assert set(mismatches["field"]) == {"board", "delist_date"}
+
+    def test_missing_directory(self, runner, tmp_path):
+        write_stock_list_csv(tmp_path, "tushare", "20260105")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert result.exit_code != 0
+        assert "Missing stock_list directory" in result.output
+
+    def test_ignores_future_delist_date(self, runner, tmp_path):
+        """A delist_date later than the snapshot date has not taken effect yet."""
+        write_stock_list_csv(
+            tmp_path, "tushare", "20260105", rows=[{"delist_date": "20260706"}]
+        )
+        write_stock_list_csv(
+            tmp_path, "ricequant", "20260105", rows=[{"delist_date": ""}]
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert_success(result)
+        assert "No differences found" in result.output
+
+    def test_detects_non_trading_day_file(self, runner, tmp_path):
+        calendar = make_calendar("20260102", closed=("20260101",))
+        write_calendar_csv(tmp_path, "tushare", calendar)
+        write_calendar_csv(tmp_path, "ricequant", calendar)
+        write_stock_list_csv(tmp_path, "tushare", "20260101")
+        write_stock_list_csv(tmp_path, "ricequant", "20260101")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert result.exit_code != 0
+        report = pd.read_csv(tmp_path / "compare" / "stock_list_diff.csv", dtype=str)
+        assert set(report["status"]) == {
+            "file_not_trading_day_tushare",
+            "file_not_trading_day_ricequant",
+        }
+
+    def test_rejects_date_filename_mismatch(self, runner, tmp_path):
+        write_stock_list_csv(tmp_path, "tushare", "20260101", filename="20260102.csv")
+        write_stock_list_csv(tmp_path, "ricequant", "20260102")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert result.exit_code != 0
+        assert "not matching the file name" in result.output
