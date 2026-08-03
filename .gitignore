@@ -63,3 +63,6 @@ Thumbs.db
 CLAUDE.local.md
 .claude/settings.local.json
 .claude/docs/
+
+# Local work-in-progress notes
+TODO.md
