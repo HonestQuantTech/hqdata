@@ -40,40 +40,6 @@ class RicequantSource(BaseSource):
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
     @staticmethod
-    def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
-        """Convert get_price() daily output to hqdata standard daily bar format."""
-        df = df.reset_index()
-        df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
-        df["date"] = df["date"].dt.strftime("%Y%m%d")
-        df = df.rename(
-            columns={"total_turnover": "turnover", "prev_close": "pre_close"}
-        )
-        if "pre_close" not in df.columns:
-            df["pre_close"] = float("nan")
-        df["change"] = (df["close"] - df["pre_close"]).round(4)
-        pct = (df["change"] / df["pre_close"]) * 100
-        df["pct_change"] = pct.replace(
-            [float("inf"), float("-inf")], float("nan")
-        ).round(4)
-        # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
-        if "volume" in df.columns:
-            df["volume"] = (df["volume"] / 100).astype("int64")
-        cols = [
-            "symbol",
-            "date",
-            "pre_close",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-            "change",
-            "pct_change",
-        ]
-        return df[cols].sort_values(["symbol", "date"]).reset_index(drop=True)
-
-    @staticmethod
     def _get_hs_connect_stocks(rq) -> set:
         """Return set of order_book_ids that are HS Connect eligible stocks.
 
@@ -392,4 +358,34 @@ class RicequantSource(BaseSource):
         )
         if df is None or df.empty:
             return self._empty_stock_daily_bar()
-        return self._normalize_daily_bar(df, rq)
+
+        df = df.reset_index()
+        df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
+        df["date"] = df["date"].dt.strftime("%Y%m%d")
+        df = df.rename(
+            columns={"total_turnover": "turnover", "prev_close": "pre_close"}
+        )
+        if "pre_close" not in df.columns:
+            df["pre_close"] = float("nan")
+        df["change"] = (df["close"] - df["pre_close"]).round(4)
+        pct = (df["change"] / df["pre_close"]) * 100
+        df["pct_change"] = pct.replace(
+            [float("inf"), float("-inf")], float("nan")
+        ).round(4)
+        # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
+        if "volume" in df.columns:
+            df["volume"] = (df["volume"] / 100).astype("int64")
+        cols = [
+            "symbol",
+            "date",
+            "pre_close",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "turnover",
+            "change",
+            "pct_change",
+        ]
+        return df[cols].sort_values(["symbol", "date"]).reset_index(drop=True)
