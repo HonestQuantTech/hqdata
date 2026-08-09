@@ -346,6 +346,50 @@ class TestFetchStockDaily:
         out_dir = tmp_path / "tushare" / "stock_daily"
         assert not out_dir.exists() or not any(out_dir.glob("*.csv"))
 
+    def test_error_on_later_day_preserves_earlier_writes(self, runner, api, tmp_path):
+        """A day already written to disk must survive an error on a later day."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        api.stock_daily_bar.side_effect = [DAILY_BAR_DF, RuntimeError("API error")]
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert "ERROR" in result.output
+        assert (tmp_path / "tushare" / "stock_daily" / "20260102.csv").exists()
+        assert not (tmp_path / "tushare" / "stock_daily" / "20260103.csv").exists()
+
+    def test_existing_file_is_skipped(self, runner, api, tmp_path):
+        """A day already on disk is not re-fetched on re-run."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        out_dir = tmp_path / "tushare" / "stock_daily"
+        out_dir.mkdir(parents=True)
+        (out_dir / "20260102.csv").write_text("placeholder")
+
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert api.stock_list.call_args_list == [call(trade_date="20260103")]
+        assert (out_dir / "20260102.csv").read_text() == "placeholder"
+
 
 # ---------------------------------------------------------------------------
 # multi-source

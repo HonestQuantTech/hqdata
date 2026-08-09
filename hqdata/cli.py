@@ -22,13 +22,6 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
     df.to_csv(path, index=False, encoding="utf-8")
 
 
-def _write_by_date(df: pd.DataFrame, out_dir: Path, tag: str) -> None:
-    """Split by 'date' column, write one CSV per date."""
-    for date_str, group in df.groupby("date"):
-        _write_csv(group, out_dir / f"{date_str}.csv")
-    click.echo(f"[{tag}] Done. Written to {out_dir}")
-
-
 def _run_for_sources(obj: dict, fn: Callable[[str, Path], None]) -> None:
     for source in obj["sources"]:
         click.echo(f"\n=== Initializing source: {source} ===")
@@ -45,6 +38,12 @@ def _fetch_stock_bar_by_trading_day(
     out_dir: Path,
     tag: str,
 ) -> None:
+    """Fetch bars for each trading day and write that day's CSV immediately.
+
+    Writing per day (rather than accumulating everything and writing once at
+    the end) means a day already on disk is skipped on re-run, and an error
+    on one day does not discard bars already fetched for earlier days.
+    """
     if start is None or end is None:
         today = hqdata.get_current_trading_day()
     else:
@@ -54,9 +53,15 @@ def _fetch_stock_bar_by_trading_day(
 
     calendar_df = hqdata.get_calendar(actual_start, actual_end, is_open=True)
     trading_days = calendar_df["date"].tolist()
-    frames: list[pd.DataFrame] = []
 
+    skipped = 0
+    written = 0
     for trading_day in trading_days:
+        out_path = out_dir / f"{trading_day}.csv"
+        if out_path.exists():
+            skipped += 1
+            continue
+
         click.echo(f"[{tag}] Fetching stock list for {trading_day}...")
         symbols = hqdata.get_stock_list(trade_date=trading_day)["symbol"].tolist()
         if not symbols:
@@ -71,17 +76,23 @@ def _fetch_stock_bar_by_trading_day(
             )
         except Exception as e:
             click.echo(f"[{tag}] ERROR: {e}", err=True)
+            click.echo(
+                f"[{tag}] {written} day(s) already written. "
+                "Re-run the same command to resume.",
+                err=True,
+            )
             return
 
         if df is not None and not df.empty:
-            frames.append(df)
+            _write_csv(df, out_path)
+            written += 1
 
-    if not frames:
+    if skipped:
+        click.echo(f"[{tag}] Skipped {skipped} already-existing file(s).")
+    if written == 0 and skipped == 0:
         click.echo(f"[{tag}] No data fetched.")
-        return
-
-    merged = pd.concat(frames, ignore_index=True)
-    _write_by_date(merged, out_dir, tag)
+    else:
+        click.echo(f"[{tag}] Done. Written to {out_dir}")
 
 
 # ---------------------------------------------------------------------------
