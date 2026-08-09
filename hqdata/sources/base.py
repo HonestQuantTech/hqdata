@@ -38,22 +38,6 @@ class BaseSource(ABC):
         )
 
     @staticmethod
-    def _empty_stock_minute_bar() -> pd.DataFrame:
-        return pd.DataFrame(
-            columns=[
-                "symbol",
-                "date",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "turnover",
-                "ets",
-            ]
-        )
-
-    @staticmethod
     def _empty_stock_daily_bar() -> pd.DataFrame:
         return pd.DataFrame(
             columns=[
@@ -159,29 +143,6 @@ class BaseSource(ABC):
         Returns:
             DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
             volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
-        """
-        pass
-
-    @abstractmethod
-    def get_stock_minute_bar(
-        self,
-        symbol: str,
-        frequency: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get minute bar data for stocks.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            frequency: one of "1m", "5m", "15m", "30m", "60m"
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
         """
         pass
 

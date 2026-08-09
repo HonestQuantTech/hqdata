@@ -12,4 +12,4 @@
 8. **更新 README** — 在数据源兼容性表格中添加新数据源
 9. **运行测试** — `pytest tests/ -v`
 
-参数描述一致性：symbol、frequency、date 等参数的 docstring 和 error message 必须与其他适配器完全一致。
+参数描述一致性：symbol、exchange、date 等参数的 docstring 和 error message 必须与其他适配器完全一致。

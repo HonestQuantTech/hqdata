@@ -333,31 +333,6 @@ class TushareSource(BaseSource):
         ]
         return df[cols].sort_values(["ets", "symbol"]).reset_index(drop=True)
 
-    def get_stock_minute_bar(
-        self,
-        symbol: str,
-        frequency: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get minute bar data for stocks.
-
-        Note:
-            Not implemented for Tushare. The stk_mins API requires additional subscription
-            permissions (分钟线独立权限) that are not currently enabled and cannot be tested.
-            Once permission is available, refer to the git history for a working batching
-            implementation using stk_mins with
-            chunk_size = 7900 // (trading_days * bars_per_day).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError(
-            "[hqdata][tushare] get_stock_minute_bar 尚未实现：stk_mins API 需要独立的分钟线权限，"
-            "当前账户未开通，无法进行测试。权限开通后可参考 git 历史记录中的实现。"
-        )
-
     def get_stock_daily_bar(
         self,
         symbol: str,

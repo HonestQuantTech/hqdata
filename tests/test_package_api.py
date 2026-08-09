@@ -23,6 +23,5 @@ class TestHqdataPackageImports:
             "previous_trading_day",
             "get_stock_list",
             "get_stock_snapshot",
-            "get_stock_minute_bar",
             "get_stock_daily_bar",
         }

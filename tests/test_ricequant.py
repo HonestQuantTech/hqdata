@@ -16,11 +16,9 @@ from tests.helpers import (
     ETS_PATTERN,
     STOCK_DAILY_BAR_COLUMNS,
     STOCK_LIST_COLUMNS,
-    STOCK_MINUTE_BAR_COLUMNS,
     STOCK_SNAPSHOT_COLUMNS,
     assert_daily_bar_sanity,
     assert_has_columns,
-    assert_minute_bar_sanity,
 )
 
 
@@ -190,21 +188,6 @@ class TestRicequantIntegration:
             assert (
                 df[col].apply(lambda x: bool(ts_pattern.match(x))).all()
             ), f"{col} format should be YYYYMMDDTHHMMSSsss"
-
-    # -- get_stock_minute_bar -------------------------------------------------
-
-    def test_get_stock_minute_bar(self):
-        """Well-formed bars for one symbol per market, and for a multi-symbol query."""
-        for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_stock_minute_bar(symbol, "1m", "20260401", "20260407")
-            assert not df.empty, f"{symbol} returned empty DataFrame"
-            assert_has_columns(df, STOCK_MINUTE_BAR_COLUMNS)
-            assert_minute_bar_sanity(df)
-
-        df = self.source.get_stock_minute_bar(
-            "000001.SZ,600000.SH", "1m", "20260401", "20260407"
-        )
-        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
 
     # -- get_stock_daily_bar --------------------------------------------------
 

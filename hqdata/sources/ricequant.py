@@ -39,38 +39,6 @@ class RicequantSource(BaseSource):
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
 
-    _MINUTE_FREQ_MAP = {
-        "1m": "1m",
-        "5m": "5m",
-        "15m": "15m",
-        "30m": "30m",
-        "60m": "60m",
-    }
-
-    @staticmethod
-    def _normalize_minute_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
-        """Convert get_price() minute output to hqdata standard minute bar format."""
-        df = df.reset_index()
-        df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
-        df["date"] = df["datetime"].dt.strftime("%Y%m%d")
-        df["ets"] = df["datetime"].dt.strftime("%Y%m%dT%H%M%S") + "000"
-        df = df.rename(columns={"total_turnover": "turnover"})
-        # rqdatac minute bar: volume unit is 股(shares), normalize to 手(lots)
-        if "volume" in df.columns:
-            df["volume"] = (df["volume"] / 100).astype("int64")
-        cols = [
-            "symbol",
-            "date",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-            "ets",
-        ]
-        return df[cols].sort_values(["symbol", "ets"]).reset_index(drop=True)
-
     @staticmethod
     def _normalize_daily_bar(df: pd.DataFrame, rq) -> pd.DataFrame:
         """Convert get_price() daily output to hqdata standard daily bar format."""
@@ -391,47 +359,6 @@ class RicequantSource(BaseSource):
             .sort_values(["ets", "symbol"])
             .reset_index(drop=True)
         )
-
-    def get_stock_minute_bar(
-        self,
-        symbol: str,
-        frequency: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get minute bar data for stocks.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            frequency: one of "1m", "5m", "15m", "30m", "60m"
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
-        """
-        if frequency not in self._MINUTE_FREQ_MAP:
-            raise ValueError(
-                f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'"
-            )
-
-        rq = _get_rqdatac()
-        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
-        if isinstance(rq_symbols, str):
-            rq_symbols = [rq_symbols]
-        df = rq.get_price(
-            rq_symbols,
-            start_date=start_date,
-            end_date=end_date,
-            frequency=self._MINUTE_FREQ_MAP[frequency],
-            adjust_type="none",
-            expect_df=True,
-        )
-        if df is None or df.empty:
-            return self._empty_stock_minute_bar()
-        return self._normalize_minute_bar(df, rq)
 
     def get_stock_daily_bar(
         self,

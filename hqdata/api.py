@@ -165,34 +165,6 @@ def get_stock_snapshot(symbol: str) -> pd.DataFrame:
     return _source.get_stock_snapshot(symbol)
 
 
-def get_stock_minute_bar(
-    symbol: str,
-    frequency: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> pd.DataFrame:
-    """Get minute bar data for stocks.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes
-        frequency: one of "1m", "5m", "15m", "30m", "60m"
-        start_date: see README
-        end_date: see README
-
-    Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = get_current_trading_day()
-    start_date = start_date or today
-    end_date = end_date or today
-    trading_days = count_trading_days(start_date, end_date)
-    return _source.get_stock_minute_bar(
-        symbol, frequency, start_date, end_date, trading_days
-    )
-
-
 def get_stock_daily_bar(
     symbol: str,
     start_date: Optional[str] = None,

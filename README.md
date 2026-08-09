@@ -23,7 +23,6 @@
 | 股票列表     | `get_stock_list`       |    ✓    |     ✓     | 获取指定交易日当天的上市股票列表 |
 | 股票实时快照 | `get_stock_snapshot`   |    ✓    |     ✓     | 含5档盘口                        |
 | 股票日线     | `get_stock_daily_bar`  |    ✓    |     ✓     |                                  |
-| 股票分钟线   | `get_stock_minute_bar` |    ✗    |     ✓     |                                  |
 
 另有更多功能，可以前往api.py查看所有功能。
 
@@ -161,16 +160,6 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀，支持以 `,` �
 
 - `start_date`：开始日期（包含）
 - `end_date`：结束日期（包含）
-
-#### frequency（频率）
-
-| 值    | 说明     | 支持源    |
-| ----- | -------- | --------- |
-| "1m"  | 1分钟线  | ricequant |
-| "5m"  | 5分钟线  | ricequant |
-| "15m" | 15分钟线 | ricequant |
-| "30m" | 30分钟线 | ricequant |
-| "60m" | 60分钟线 | ricequant |
 
 #### exchange（交易所）
 

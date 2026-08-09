@@ -10,7 +10,6 @@ import hqdata
 from hqdata.compare_cli import compare
 
 VALID_SOURCES = ["tushare", "ricequant"]
-VALID_FREQUENCIES = ["1m", "5m", "15m", "30m", "60m"]
 
 
 # ---------------------------------------------------------------------------
@@ -201,46 +200,6 @@ def cmd_stock_list(obj: dict, start: Optional[str], end: Optional[str]) -> None:
                 f"[{source}][stock-list] Skipped {skipped} already-existing file(s)."
             )
         click.echo(f"[{source}][stock-list] Done. Written to {out_dir}")
-
-    _run_for_sources(obj, fetch)
-
-
-@cli.command("stock-minute")
-@click.option(
-    "--start",
-    default=None,
-    metavar="YYYYMMDD",
-    help="Start date (default: current trading day)",
-)
-@click.option(
-    "--end",
-    default=None,
-    metavar="YYYYMMDD",
-    help="End date (default: current trading day)",
-)
-@click.option(
-    "--frequency",
-    "-f",
-    default="1m",
-    type=click.Choice(VALID_FREQUENCIES),
-    show_default=True,
-    help="Bar frequency.",
-)
-@click.pass_obj
-def cmd_stock_minute(
-    obj: dict, start: Optional[str], end: Optional[str], frequency: str
-) -> None:
-    """Fetch stock minute bar data (ricequant only)."""
-
-    def fetch(source: str, output_root: Path) -> None:
-        _fetch_stock_bar_by_trading_day(
-            source=source,
-            get_bar_fn=lambda s, **kw: hqdata.get_stock_minute_bar(s, frequency, **kw),
-            start=start,
-            end=end,
-            out_dir=output_root / source / "stock_minute",
-            tag=f"{source}][stock-minute",
-        )
 
     _run_for_sources(obj, fetch)
 

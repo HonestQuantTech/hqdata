@@ -46,20 +46,6 @@ DAILY_BAR_DF = pd.DataFrame(
     }
 )
 
-MINUTE_BAR_DF = pd.DataFrame(
-    {
-        "symbol": ["600000.SH"],
-        "date": ["20260102"],
-        "open": [10.1],
-        "high": [10.2],
-        "low": [10.0],
-        "close": [10.15],
-        "volume": [100],
-        "turnover": [1015.0],
-        "ets": ["20260102T093000000"],
-    }
-)
-
 
 def _stock_list_stub(trade_date):
     """Mimic real sources: stamp the requested trade_date into the date column."""
@@ -89,20 +75,17 @@ def api():
         patch("hqdata.cli.hqdata.get_current_trading_day") as current_trading_day,
         patch("hqdata.cli.hqdata.get_calendar") as calendar,
         patch("hqdata.cli.hqdata.get_stock_list") as stock_list,
-        patch("hqdata.cli.hqdata.get_stock_minute_bar") as stock_minute_bar,
         patch("hqdata.cli.hqdata.get_stock_daily_bar") as stock_daily_bar,
     ):
         current_trading_day.return_value = "20260102"
         calendar.return_value = make_calendar("20260102")
         stock_list.side_effect = _stock_list_stub
-        stock_minute_bar.return_value = MINUTE_BAR_DF
         stock_daily_bar.return_value = DAILY_BAR_DF
         yield SimpleNamespace(
             init_source=init_source,
             current_trading_day=current_trading_day,
             calendar=calendar,
             stock_list=stock_list,
-            stock_minute_bar=stock_minute_bar,
             stock_daily_bar=stock_daily_bar,
         )
 
@@ -129,10 +112,6 @@ class TestCLIDefaults:
         result = runner.invoke(cli, ["--output", str(tmp_path), "stock-list"])
         assert_success(result)
         assert (tmp_path / "tushare" / "stock_list" / "20260102.csv").exists()
-
-    def test_stock_minute_invalid_frequency(self, runner):
-        result = runner.invoke(cli, ["stock-minute", "--frequency", "2m"])
-        assert result.exit_code != 0
 
     def test_calendar_requires_start_end(self, runner):
         result = runner.invoke(cli, ["calendar"])
@@ -273,39 +252,6 @@ class TestFetchStockList:
         assert result.exit_code != 0
         assert "date column contains" in result.output
         assert not (tmp_path / "tushare" / "stock_list" / "20260102.csv").exists()
-
-
-# ---------------------------------------------------------------------------
-# stock-minute
-# ---------------------------------------------------------------------------
-
-
-class TestFetchStockMinute:
-    def test_writes_csv_per_date_and_passes_frequency(self, runner, api, tmp_path):
-        api.calendar.return_value = make_calendar("20260401", "20260402")
-        result = runner.invoke(
-            cli,
-            [
-                "--output",
-                str(tmp_path),
-                "stock-minute",
-                "--start",
-                "20260401",
-                "--end",
-                "20260407",
-                "--frequency",
-                "15m",
-            ],
-        )
-        assert_success(result)
-        # Output file is named after the bar data's date column
-        assert (tmp_path / "tushare" / "stock_minute" / "20260102.csv").exists()
-        assert len(api.stock_minute_bar.call_args_list) == 2
-        for expected_day, c in zip(
-            ["20260401", "20260402"], api.stock_minute_bar.call_args_list
-        ):
-            assert c.args[1] == "15m"
-            assert c.kwargs == {"start_date": expected_day, "end_date": expected_day}
 
 
 # ---------------------------------------------------------------------------
