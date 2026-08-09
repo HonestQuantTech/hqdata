@@ -1,7 +1,7 @@
 """Ricequant (米筐) data source adapter"""
 
 import os
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 import pandas as pd
 
@@ -44,26 +44,6 @@ class RicequantSource(BaseSource):
         "BSE": "BJS",
     }
     _REVERSE_BOARD_MAP = {v: k for k, v in _BOARD_MAP.items()}
-
-    @staticmethod
-    def _get_hs_connect_stocks(rq) -> set:
-        """Return set of order_book_ids that are HS Connect eligible stocks.
-
-        Fetches data via get_stock_connect('all_connect') for the most recent
-        trading date that has available data (walks back up to one year).
-        Returns an empty set if no data is available.
-        """
-        today = date.today()
-        trading_dates = rq.get_trading_dates(
-            start_date=today.replace(year=today.year - 1),
-            end_date=today,
-            market="cn",
-        )
-        for d in reversed(trading_dates):
-            df = rq.get_stock_connect("all_connect", start_date=d, end_date=d)
-            if df is not None:
-                return set(df.index.get_level_values("order_book_id").unique())
-        return set()
 
     def __init__(
         self,
@@ -174,8 +154,8 @@ class RicequantSource(BaseSource):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, date, name, exchange, board, industry,
-            curr_type, list_date, delist_date, is_hs
+            DataFrame with columns: symbol, date, name, exchange, board,
+            curr_type, list_date, delist_date
         """
         rq = _get_rqdatac()
         df = rq.all_instruments(type="CS", date=trade_date)
@@ -226,7 +206,6 @@ class RicequantSource(BaseSource):
         if df.empty:
             return self._empty_stock_list()
 
-        hs_stocks = self._get_hs_connect_stocks(rq)
         result = pd.DataFrame(
             {
                 "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
@@ -238,14 +217,9 @@ class RicequantSource(BaseSource):
                 "board": df["board_type"]
                 .map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
                 .tolist(),
-                "industry": df["industry_name"].tolist(),
                 "curr_type": ["CNY"] * len(df),
                 "list_date": df["listed_date"].tolist(),
                 "delist_date": df["de_listed_date"].tolist(),
-                "is_hs": df["order_book_id"]
-                .isin(hs_stocks)
-                .map({True: "Y", False: "N"})
-                .tolist(),
             }
         )
         return result.sort_values("symbol").reset_index(drop=True)

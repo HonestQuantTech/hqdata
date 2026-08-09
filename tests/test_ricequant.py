@@ -40,7 +40,6 @@ class TestRicequantSource:
                 "de_listed_date": ["2026-03-27", "0000-00-00"],
                 "exchange": ["XSHE", "XSHE"],
                 "board_type": ["MainBoard", "MainBoard"],
-                "industry_name": ["制造业", "货币金融服务"],
             }
         )
         mock_rq = SimpleNamespace(
@@ -51,10 +50,7 @@ class TestRicequantSource:
         )
 
         source = RicequantSource.__new__(RicequantSource)
-        with (
-            patch("hqdata.sources.ricequant._get_rqdatac", return_value=mock_rq),
-            patch.object(RicequantSource, "_get_hs_connect_stocks", return_value=set()),
-        ):
+        with patch("hqdata.sources.ricequant._get_rqdatac", return_value=mock_rq):
             df = source.get_stock_list(trade_date="20260105")
 
         df = df.set_index("symbol")
@@ -104,4 +100,3 @@ class TestRicequantIntegration(IntegrationTestMixin):
         assert non_empty_delist.str.match(
             DATE_PATTERN
         ).all(), "non-empty delist_date should be in YYYYMMDD format"
-        assert df["is_hs"].isin(["Y", "N"]).all(), "is_hs should only contain Y or N"

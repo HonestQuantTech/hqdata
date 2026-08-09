@@ -135,8 +135,8 @@ def get_stock_list(
         trade_date: snapshot date (YYYYMMDD); defaults to current trading day.
 
     Returns:
-        DataFrame with columns: symbol, date, name, exchange, board, industry,
-        curr_type, list_date, delist_date, is_hs
+        DataFrame with columns: symbol, date, name, exchange, board,
+        curr_type, list_date, delist_date
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")

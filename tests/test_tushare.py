@@ -40,7 +40,6 @@ class TestTushareSource:
                 {
                     "ts_code": ["000001.SZ", "000002.SZ", "000003.SZ", "000004.SZ"],
                     "name": ["A", "B", "C", "D"],
-                    "industry": ["银行"] * 4,
                     "market": ["主板"] * 4,
                     "exchange": ["SZSE"] * 4,
                     "curr_type": ["CNY"] * 4,
@@ -50,7 +49,6 @@ class TestTushareSource:
                     # D: lists after trade_date → out
                     "list_date": ["20190101", "20200102", "20180101", "20200103"],
                     "delist_date": [None, "20200103", "20200102", None],
-                    "is_hs": ["N", "H", "S", "N"],
                 }
             )
         )
@@ -101,4 +99,3 @@ class TestTushareIntegration(IntegrationTestMixin):
             df["symbol"].str.match(r"^\d{6}\.(SH|SZ|BJ)$").all()
         ), "symbol format should be xxxxxx.SH/SZ/BJ"
         assert df["date"].str.match(DATE_PATTERN).all(), "date not in YYYYMMDD format"
-        assert df["is_hs"].isin(["Y", "N"]).all(), "is_hs should only contain Y or N"

@@ -68,9 +68,7 @@ class TushareSource(BaseSource):
     _EXCHANGE_MAP = {"SSE": "SSE", "SZE": "SZSE", "BSE": "BSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
-    _STOCK_LIST_FIELDS = (
-        "ts_code,name,industry,market,exchange,curr_type,list_date,delist_date,is_hs"
-    )
+    _STOCK_LIST_FIELDS = "ts_code,name,market,exchange,curr_type,list_date,delist_date"
 
     @staticmethod
     def _map_comma_separated(value: str, mapping: dict[str, str]) -> str:
@@ -162,8 +160,8 @@ class TushareSource(BaseSource):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, date, name, exchange, board, industry,
-            curr_type, list_date, delist_date, is_hs
+            DataFrame with columns: symbol, date, name, exchange, board,
+            curr_type, list_date, delist_date
         """
         # Map English board abbreviations to Chinese names for tushare API
         if board:
@@ -211,7 +209,6 @@ class TushareSource(BaseSource):
             lambda x: self._REVERSE_EXCHANGE_MAP.get(x, x)
         )
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
-        df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
         cols = [
             "symbol",
@@ -219,11 +216,9 @@ class TushareSource(BaseSource):
             "name",
             "exchange",
             "board",
-            "industry",
             "curr_type",
             "list_date",
             "delist_date",
-            "is_hs",
         ]
         return df[cols]
 

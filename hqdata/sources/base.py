@@ -29,11 +29,9 @@ class BaseSource(ABC):
                 "name",
                 "exchange",
                 "board",
-                "industry",
                 "curr_type",
                 "list_date",
                 "delist_date",
-                "is_hs",
             ]
         )
 
@@ -128,8 +126,8 @@ class BaseSource(ABC):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, date, name, exchange, board, industry,
-            curr_type, list_date, delist_date, is_hs
+            DataFrame with columns: symbol, date, name, exchange, board,
+            curr_type, list_date, delist_date
         """
         pass
 

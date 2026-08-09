@@ -22,11 +22,9 @@ STOCK_LIST_DF = pd.DataFrame(
         "name": ["浦发银行", "平安银行"],
         "exchange": ["SSE", "SZE"],
         "board": ["MB", "MB"],
-        "industry": ["银行", "银行"],
         "curr_type": ["CNY", "CNY"],
         "list_date": ["19991110", "19910403"],
         "delist_date": ["", ""],
-        "is_hs": ["N", "Y"],
     }
 )
 
@@ -417,11 +415,9 @@ _STOCK_ROW = {
     "name": "平安银行",
     "exchange": "SZE",
     "board": "MB",
-    "industry": "银行",
     "curr_type": "CNY",
     "list_date": "19910403",
     "delist_date": "",
-    "is_hs": "Y",
 }
 
 _STOCK_COLUMNS = list(STOCK_LIST_DF.columns)
@@ -492,7 +488,6 @@ class TestCompareStockList:
                     "name": "样本退",
                     "exchange": "BSE",
                     "board": "BSE",
-                    "is_hs": "N",
                 }
             ],
         )
@@ -506,7 +501,6 @@ class TestCompareStockList:
                     "name": "*ST样本",
                     "exchange": "BJSE",
                     "board": "BSE",
-                    "industry": "货币金融服务",
                     "curr_type": "cny",
                     "list_date": "1991-04-03",
                     "delist_date": "0000-00-00",
@@ -532,8 +526,6 @@ class TestCompareStockList:
                 {
                     "symbol": "000002.SZ",
                     "name": "万科A",
-                    "industry": "地产",
-                    "is_hs": "N",
                 },
             ],
         )
