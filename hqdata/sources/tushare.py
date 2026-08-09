@@ -73,6 +73,13 @@ class TushareSource(BaseSource):
     )
 
     @staticmethod
+    def _map_comma_separated(value: str, mapping: dict[str, str]) -> str:
+        """Map comma-separated values while preserving unknown values."""
+        return ",".join(
+            mapping.get(item.strip(), item.strip()) for item in value.split(",")
+        )
+
+    @staticmethod
     def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(
             columns={
@@ -160,20 +167,11 @@ class TushareSource(BaseSource):
         """
         # Map English board abbreviations to Chinese names for tushare API
         if board:
-            market_names = []
-            for m in board.split(","):
-                m = m.strip()
-                market_names.append(self._BOARD_MAP.get(m, m))
-            board = ",".join(market_names)
+            board = self._map_comma_separated(board, self._BOARD_MAP)
 
         # Map exchange to tushare native values (e.g. SZE → SZSE)
-        ts_exchange = None
         if exchange:
-            ts_exchanges = [
-                self._EXCHANGE_MAP.get(e.strip(), e.strip())
-                for e in exchange.split(",")
-            ]
-            ts_exchange = ",".join(ts_exchanges)
+            exchange = self._map_comma_separated(exchange, self._EXCHANGE_MAP)
 
         # stock_basic API returns at most 6000 rows per call.
         # Query listed + delisted names once, then reconstruct the requested universe
@@ -181,7 +179,7 @@ class TushareSource(BaseSource):
         self._rate_limiter.acquire()
         df = self.pro.stock_basic(
             ts_code=symbol,
-            exchange=ts_exchange,
+            exchange=exchange,
             market=board,
             list_status="L,D",
             fields=self._STOCK_LIST_FIELDS,
