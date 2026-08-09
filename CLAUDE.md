@@ -40,7 +40,6 @@ hqdata/config.py        # 在 import 时从项目根目录加载 .env
 - **股票板块参数（`get_stock_list` 的 `board`）：** `MB`（主板）| `GEM`（创业板）| `STAR`（科创板）| `BSE`（北交所）；各数据源适配器内部负责与原生值互转，上层调用者和返回 DataFrame 只见这四种值
 - **日期格式：** `YYYYMMDD` 字符串
 - **凭据配置：** 从项目根目录的 `.env` 加载（参考 `.env.example`）
-- `pyproject.toml` 已被 gitignore，需在本地手动创建
 
 ## 开发规范
 
