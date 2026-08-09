@@ -30,71 +30,6 @@ def _run_for_sources(obj: dict, fn: Callable[[str, Path], None]) -> None:
     click.echo("\nAll done.")
 
 
-def _fetch_stock_bar_by_trading_day(
-    source: str,
-    get_bar_fn,
-    start: Optional[str],
-    end: Optional[str],
-    out_dir: Path,
-    tag: str,
-) -> None:
-    """Fetch bars for each trading day and write that day's CSV immediately.
-
-    Writing per day (rather than accumulating everything and writing once at
-    the end) means a day already on disk is skipped on re-run, and an error
-    on one day does not discard bars already fetched for earlier days.
-    """
-    if start is None or end is None:
-        today = hqdata.get_current_trading_day()
-    else:
-        today = None
-    actual_start = start or today
-    actual_end = end or today
-
-    calendar_df = hqdata.get_calendar(actual_start, actual_end, is_open=True)
-    trading_days = calendar_df["date"].tolist()
-
-    skipped = 0
-    written = 0
-    for trading_day in trading_days:
-        out_path = out_dir / f"{trading_day}.csv"
-        if out_path.exists():
-            skipped += 1
-            continue
-
-        click.echo(f"[{tag}] Fetching stock list for {trading_day}...")
-        symbols = hqdata.get_stock_list(trade_date=trading_day)["symbol"].tolist()
-        if not symbols:
-            continue
-
-        click.echo(
-            f"[{tag}] Fetching bars for {trading_day} ({len(symbols)} symbols)..."
-        )
-        try:
-            df = get_bar_fn(
-                ",".join(symbols), start_date=trading_day, end_date=trading_day
-            )
-        except Exception as e:
-            click.echo(f"[{tag}] ERROR: {e}", err=True)
-            click.echo(
-                f"[{tag}] {written} day(s) already written. "
-                "Re-run the same command to resume.",
-                err=True,
-            )
-            return
-
-        if df is not None and not df.empty:
-            _write_csv(df, out_path)
-            written += 1
-
-    if skipped:
-        click.echo(f"[{tag}] Skipped {skipped} already-existing file(s).")
-    if written == 0 and skipped == 0:
-        click.echo(f"[{tag}] No data fetched.")
-    else:
-        click.echo(f"[{tag}] Done. Written to {out_dir}")
-
-
 # ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
@@ -230,17 +165,65 @@ def cmd_stock_list(obj: dict, start: Optional[str], end: Optional[str]) -> None:
 )
 @click.pass_obj
 def cmd_stock_daily(obj: dict, start: Optional[str], end: Optional[str]) -> None:
-    """Fetch stock daily bar data."""
+    """Fetch stock daily bar data for a date range and save one CSV per trading day.
+
+    \b
+    Writing per day (rather than accumulating everything and writing once at
+    the end) means a day already on disk is skipped on re-run, and an error
+    on one day does not discard bars already fetched for earlier days.
+    """
 
     def fetch(source: str, output_root: Path) -> None:
-        _fetch_stock_bar_by_trading_day(
-            source=source,
-            get_bar_fn=hqdata.get_stock_daily_bar,
-            start=start,
-            end=end,
-            out_dir=output_root / source / "stock_daily",
-            tag=f"{source}][stock-daily",
-        )
+        today = hqdata.get_current_trading_day()
+        actual_start = start or today
+        actual_end = end or today
+
+        calendar_df = hqdata.get_calendar(actual_start, actual_end, is_open=True)
+        trading_days = calendar_df["date"].tolist()
+
+        out_dir = output_root / source / "stock_daily"
+        skipped = 0
+        written = 0
+        for d in trading_days:
+            out_path = out_dir / f"{d}.csv"
+            if out_path.exists():
+                skipped += 1
+                continue
+
+            click.echo(f"[{source}][stock-daily] Fetching stock list for {d}...")
+            symbols = hqdata.get_stock_list(trade_date=d)["symbol"].tolist()
+            if not symbols:
+                continue
+
+            click.echo(
+                f"[{source}][stock-daily] Fetching bars for {d} "
+                f"({len(symbols)} symbols)..."
+            )
+            try:
+                df = hqdata.get_stock_daily_bar(
+                    ",".join(symbols), start_date=d, end_date=d
+                )
+            except Exception as e:
+                click.echo(f"[{source}][stock-daily] ERROR: {e}", err=True)
+                click.echo(
+                    f"[{source}][stock-daily] {written} day(s) already written. "
+                    "Re-run the same command to resume.",
+                    err=True,
+                )
+                return
+
+            if df is not None and not df.empty:
+                _write_csv(df, out_path)
+                written += 1
+
+        if skipped:
+            click.echo(
+                f"[{source}][stock-daily] Skipped {skipped} already-existing file(s)."
+            )
+        if written == 0 and skipped == 0:
+            click.echo(f"[{source}][stock-daily] No data fetched.")
+        else:
+            click.echo(f"[{source}][stock-daily] Done. Written to {out_dir}")
 
     _run_for_sources(obj, fetch)
 
