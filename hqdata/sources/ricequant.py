@@ -78,7 +78,7 @@ class RicequantSource(BaseSource):
         """Return set of order_book_ids that are HS Connect eligible stocks.
 
         Fetches data via get_stock_connect('all_connect') for the most recent
-        trading date that has available data (walks back up to 60 trading days).
+        trading date that has available data (walks back up to one year).
         Returns an empty set if no data is available.
         """
         today = date.today()
