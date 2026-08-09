@@ -1,7 +1,6 @@
 """Tests for tushare source"""
 
 import os
-import re
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -12,11 +11,8 @@ import hqdata.config  # noqa: F401  加载 .env
 from hqdata.sources.tushare import TushareSource
 from tests.helpers import (
     DATE_PATTERN,
-    ETS_PATTERN,
-    STOCK_DAILY_BAR_COLUMNS,
+    IntegrationTestMixin,
     STOCK_LIST_COLUMNS,
-    STOCK_SNAPSHOT_COLUMNS,
-    assert_daily_bar_sanity,
     assert_has_columns,
 )
 
@@ -73,8 +69,12 @@ class TestTushareSource:
         )
 
 
-class TestTushareIntegration:
+class TestTushareIntegration(IntegrationTestMixin):
     """Integration tests using real Tushare API data."""
+
+    # get_stock_daily_bar bypasses the api.py layer here, so trading_days
+    # (normally injected by api.py) must be passed explicitly.
+    _DAILY_BAR_KWARGS = {"trading_days": 57}
 
     @pytest.fixture(autouse=True)
     def setup(self):
@@ -90,28 +90,6 @@ class TestTushareIntegration:
             pytest.skip("No recent trading day available from Tushare")
         self.trade_date = calendar["date"].iloc[-1]
 
-    # -- get_calendar -------------------------------------------------------
-
-    def test_get_calendar(self):
-        """Full range: every day present, is_open flags well-formed, subsets consistent."""
-        df = self.source.get_calendar("20260101", "20260401")
-        assert not df.empty, "get_calendar returned empty DataFrame"
-        assert_has_columns(df, {"date", "is_open"})
-        assert df["date"].str.match(DATE_PATTERN).all(), "date not in YYYYMMDD format"
-        assert (
-            df["is_open"].isin(["Y", "N"]).all()
-        ), "is_open should only contain Y or N"
-        assert len(df) == 91, f"Expected 91 days, got {len(df)}"
-        assert df["date"].iloc[0] == "20260101"
-        assert df["date"].iloc[-1] == "20260401"
-
-        open_df = self.source.get_calendar("20260101", "20260401", is_open=True)
-        closed_df = self.source.get_calendar("20260101", "20260401", is_open=False)
-        assert (open_df["is_open"] == "Y").all()
-        assert (closed_df["is_open"] == "N").all()
-        assert len(open_df) == 57, f"Expected 57 trading days, got {len(open_df)}"
-        assert len(open_df) + len(closed_df) == len(df)
-
     # -- get_stock_list -----------------------------------------------------
 
     def test_get_stock_list(self):
@@ -124,78 +102,3 @@ class TestTushareIntegration:
         ), "symbol format should be xxxxxx.SH/SZ/BJ"
         assert df["date"].str.match(DATE_PATTERN).all(), "date not in YYYYMMDD format"
         assert df["is_hs"].isin(["Y", "N"]).all(), "is_hs should only contain Y or N"
-
-    def test_get_stock_list_by_symbol(self):
-        """Single symbol returns one row; comma-separated returns each requested symbol."""
-        df = self.source.get_stock_list(trade_date=self.trade_date, symbol="000001.SZ")
-        assert len(df) == 1, f"Expected single stock, got {len(df)} rows"
-        assert df.iloc[0]["symbol"] == "000001.SZ"
-
-        df = self.source.get_stock_list(
-            trade_date=self.trade_date, symbol="000001.SZ,600000.SH"
-        )
-        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
-
-    def test_get_stock_list_by_exchange(self):
-        """Single exchange filters strictly; multiple exchanges include each of them."""
-        df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE")
-        assert not df.empty, "empty DataFrame for exchange=SSE"
-        assert (df["exchange"] == "SSE").all(), "Expected all stocks to be from SSE"
-
-        df = self.source.get_stock_list(trade_date=self.trade_date, exchange="SSE,SZE")
-        assert set(df["exchange"]) == {"SSE", "SZE"}
-
-    def test_get_stock_list_by_board(self):
-        """Single board filters strictly; multiple boards include each of them."""
-        df = self.source.get_stock_list(trade_date=self.trade_date, board="MB")
-        assert not df.empty, "empty DataFrame for board=MB"
-        assert (df["board"] == "MB").all(), "Expected all stocks to be from MB"
-
-        df = self.source.get_stock_list(trade_date=self.trade_date, board="MB,GEM,STAR")
-        assert set(df["board"]) == {"MB", "GEM", "STAR"}
-
-    def test_get_stock_list_combined_filters(self):
-        """Multiple filters combine with AND semantics."""
-        df = self.source.get_stock_list(
-            trade_date=self.trade_date, board="MB", exchange="SSE"
-        )
-        assert not df.empty, "empty DataFrame for board=MB,exchange=SSE"
-        assert (df["board"] == "MB").all()
-        assert (df["exchange"] == "SSE").all()
-
-        df = self.source.get_stock_list(
-            trade_date=self.trade_date, symbol="000001.SZ", board="MB", exchange="SZE"
-        )
-        assert list(df["symbol"]) == ["000001.SZ"]
-
-    # -- get_stock_snapshot -------------------------------------------------
-
-    def test_get_stock_snapshot(self):
-        df = self.source.get_stock_snapshot("000001.SZ,600000.SH")
-        assert not df.empty, "get_stock_snapshot returned empty DataFrame"
-        assert_has_columns(df, STOCK_SNAPSHOT_COLUMNS)
-        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
-        assert (df["volume"] > 0).all(), "volume should be > 0"
-        ts_pattern = re.compile(ETS_PATTERN)
-        for col in ("ets", "lts"):
-            assert (
-                df[col].apply(lambda x: bool(ts_pattern.match(x))).all()
-            ), f"{col} format should be YYYYMMDDTHHMMSSsss"
-
-    # -- get_stock_daily_bar --------------------------------------------------
-
-    def test_get_stock_daily_bar(self):
-        """Well-formed bars for one symbol per market, and for a multi-symbol query."""
-        for symbol in ("000001.SZ", "600000.SH"):
-            df = self.source.get_stock_daily_bar(
-                symbol, "20260101", "20260401", trading_days=57
-            )
-            assert not df.empty, f"{symbol} returned empty DataFrame"
-            assert_has_columns(df, STOCK_DAILY_BAR_COLUMNS)
-            assert_daily_bar_sanity(df)
-
-        df = self.source.get_stock_daily_bar(
-            "000001.SZ,600000.SH", "20260101", "20260401", trading_days=57
-        )
-        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
-        assert_daily_bar_sanity(df)
