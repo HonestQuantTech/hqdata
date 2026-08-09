@@ -10,9 +10,6 @@ STOCK_LIST_COLUMNS = set(BaseSource._empty_stock_list().columns)
 STOCK_MINUTE_BAR_COLUMNS = set(BaseSource._empty_stock_minute_bar().columns)
 STOCK_DAILY_BAR_COLUMNS = set(BaseSource._empty_stock_daily_bar().columns)
 STOCK_SNAPSHOT_COLUMNS = set(BaseSource._empty_stock_snapshot().columns)
-INDEX_LIST_COLUMNS = set(BaseSource._empty_index_list().columns)
-INDEX_MINUTE_BAR_COLUMNS = set(BaseSource._empty_index_minute_bar().columns)
-INDEX_DAILY_BAR_COLUMNS = set(BaseSource._empty_index_daily_bar().columns)
 
 DATE_PATTERN = r"^\d{8}$"
 ETS_PATTERN = r"^\d{8}T\d{9}$"

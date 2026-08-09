@@ -25,7 +25,4 @@ class TestHqdataPackageImports:
             "get_stock_snapshot",
             "get_stock_minute_bar",
             "get_stock_daily_bar",
-            "get_index_list",
-            "get_index_minute_bar",
-            "get_index_daily_bar",
         }

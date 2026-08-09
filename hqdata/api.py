@@ -1,6 +1,5 @@
 """hqdata public API - only entry point for upper layers"""
 
-from datetime import date
 from typing import Literal, Optional
 import pandas as pd
 
@@ -216,74 +215,3 @@ def get_stock_daily_bar(
     end_date = end_date or today
     trading_days = count_trading_days(start_date, end_date)
     return _source.get_stock_daily_bar(symbol, start_date, end_date, trading_days)
-
-
-def get_index_list(
-    symbol: Optional[str] = None,
-    market: Optional[str] = "SSE,SZE",
-) -> pd.DataFrame:
-    """Get basic info about an index or the index info of a market.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-        market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
-
-    Returns:
-        DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    trade_date = get_current_trading_day()
-    return _source.get_index_list(symbol, market, trade_date)
-
-
-def get_index_minute_bar(
-    symbol: str,
-    frequency: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> pd.DataFrame:
-    """Get minute bar data for an index.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes
-        frequency: one of "1m", "5m", "15m", "30m", "60m"
-        start_date: see README
-        end_date: see README
-
-    Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = get_current_trading_day()
-    start_date = start_date or today
-    end_date = end_date or today
-    trading_days = count_trading_days(start_date, end_date)
-    return _source.get_index_minute_bar(
-        symbol, frequency, start_date, end_date, trading_days
-    )
-
-
-def get_index_daily_bar(
-    symbol: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> pd.DataFrame:
-    """Get daily bar data for an index.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes
-        start_date: see README
-        end_date: see README
-
-    Returns:
-        DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = get_current_trading_day()
-    start_date = start_date or today
-    end_date = end_date or today
-    trading_days = count_trading_days(start_date, end_date)
-    return _source.get_index_daily_bar(symbol, start_date, end_date, trading_days)

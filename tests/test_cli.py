@@ -30,19 +30,6 @@ STOCK_LIST_DF = pd.DataFrame(
     }
 )
 
-INDEX_LIST_DF = pd.DataFrame(
-    {
-        "symbol": ["000300.SH", "000905.SH"],
-        "date": ["20260101", "20260101"],
-        "name": ["沪深300", "中证500"],
-        "fullname": ["沪深300指数", "中证500指数"],
-        "market": ["CSI", "CSI"],
-        "base_date": ["20041231", "20041231"],
-        "base_point": [1000.0, 1000.0],
-        "list_date": ["20050404", "20070115"],
-    }
-)
-
 DAILY_BAR_DF = pd.DataFrame(
     {
         "symbol": ["600000.SH"],
@@ -104,18 +91,12 @@ def api():
         patch("hqdata.cli.hqdata.get_stock_list") as stock_list,
         patch("hqdata.cli.hqdata.get_stock_minute_bar") as stock_minute_bar,
         patch("hqdata.cli.hqdata.get_stock_daily_bar") as stock_daily_bar,
-        patch("hqdata.cli.hqdata.get_index_list") as index_list,
-        patch("hqdata.cli.hqdata.get_index_minute_bar") as index_minute_bar,
-        patch("hqdata.cli.hqdata.get_index_daily_bar") as index_daily_bar,
     ):
         current_trading_day.return_value = "20260102"
         calendar.return_value = make_calendar("20260102")
         stock_list.side_effect = _stock_list_stub
         stock_minute_bar.return_value = MINUTE_BAR_DF
         stock_daily_bar.return_value = DAILY_BAR_DF
-        index_list.return_value = INDEX_LIST_DF
-        index_minute_bar.return_value = MINUTE_BAR_DF
-        index_daily_bar.return_value = DAILY_BAR_DF
         yield SimpleNamespace(
             init_source=init_source,
             current_trading_day=current_trading_day,
@@ -123,9 +104,6 @@ def api():
             stock_list=stock_list,
             stock_minute_bar=stock_minute_bar,
             stock_daily_bar=stock_daily_bar,
-            index_list=index_list,
-            index_minute_bar=index_minute_bar,
-            index_daily_bar=index_daily_bar,
         )
 
 
@@ -159,11 +137,6 @@ class TestCLIDefaults:
     def test_calendar_requires_start_end(self, runner):
         result = runner.invoke(cli, ["calendar"])
         assert result.exit_code != 0
-
-    def test_index_list_default_market(self, runner, api, tmp_path):
-        result = runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
-        assert_success(result)
-        api.index_list.assert_called_once_with(market="SSE,SZE")
 
     def test_default_output_expanduser(self, runner, api):
         """Default output ~/.hqdata must be expanded (not literal ~) in echoed paths."""
@@ -426,73 +399,6 @@ class TestFetchStockDaily:
         assert "ERROR" in result.output
         out_dir = tmp_path / "tushare" / "stock_daily"
         assert not out_dir.exists() or not any(out_dir.glob("*.csv"))
-
-
-# ---------------------------------------------------------------------------
-# index-list
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexList:
-    def test_writes_today_csv(self, runner, api, tmp_path):
-        result = runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
-        assert_success(result)
-        assert (tmp_path / "tushare" / "index_list" / "20260102.csv").exists()
-
-    def test_market_passed_to_api(self, runner, api, tmp_path):
-        result = runner.invoke(
-            cli, ["--output", str(tmp_path), "index-list", "--market", "CSI"]
-        )
-        assert_success(result)
-        api.index_list.assert_called_once_with(market="CSI")
-
-
-# ---------------------------------------------------------------------------
-# index-minute
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexMinute:
-    def test_writes_csv_per_date(self, runner, api, tmp_path):
-        result = runner.invoke(
-            cli,
-            [
-                "--output",
-                str(tmp_path),
-                "index-minute",
-                "--start",
-                "20260401",
-                "--end",
-                "20260407",
-                "--frequency",
-                "1m",
-            ],
-        )
-        assert_success(result)
-        assert (tmp_path / "tushare" / "index_minute" / "20260102.csv").exists()
-
-
-# ---------------------------------------------------------------------------
-# index-daily
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexDaily:
-    def test_writes_csv_per_date(self, runner, api, tmp_path):
-        result = runner.invoke(
-            cli,
-            [
-                "--output",
-                str(tmp_path),
-                "index-daily",
-                "--start",
-                "20260101",
-                "--end",
-                "20260103",
-            ],
-        )
-        assert_success(result)
-        assert (tmp_path / "tushare" / "index_daily" / "20260102.csv").exists()
 
 
 # ---------------------------------------------------------------------------

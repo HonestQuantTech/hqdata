@@ -142,9 +142,9 @@ def _diff_file_presence(
 ) -> list[dict[str, object]]:
     """Diff rows for file-level presence: non-trading-day files and one-sided files.
 
-    Shared by every per-date compare command (stock-list, index-list, stock-daily,
-    index-daily): each of these stores one file per trading day, so file presence
-    should always agree with each source's own calendar.csv and with the other source.
+    Shared by every per-date compare command (stock-list, stock-daily): each of
+    these stores one file per trading day, so file presence should always agree
+    with each source's own calendar.csv and with the other source.
     """
     rows: list[dict[str, object]] = []
 

@@ -1,7 +1,6 @@
 """Ricequant (米筐) data source adapter"""
 
 import os
-import warnings
 from datetime import date, datetime, timedelta
 from typing import Optional
 import pandas as pd
@@ -31,9 +30,6 @@ class RicequantSource(BaseSource):
 
     _EXCHANGE_MAP = {"SSE": "XSHG", "SZE": "XSHE", "BSE": "BJSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
-
-    _MARKET_MAP = {"SSE": "XSHG", "SZE": "XSHE", "BSE": "BJSE"}
-    _REVERSE_MARKET_MAP = {v: k for k, v in _MARKET_MAP.items()}
 
     _BOARD_MAP = {
         "MB": "MainBoard",
@@ -469,167 +465,4 @@ class RicequantSource(BaseSource):
         )
         if df is None or df.empty:
             return self._empty_stock_daily_bar()
-        return self._normalize_daily_bar(df, rq)
-
-    def get_index_list(
-        self,
-        symbol: Optional[str] = None,
-        market: Optional[str] = "SSE,SZE",
-        trade_date: Optional[str] = None,
-    ) -> pd.DataFrame:
-        """Get basic info about an index or the index info of a market.
-
-        Note:
-            - fullname is the same as name (rqdatac does not provide a separate full name).
-            - market filter only supports SSE and SZE; CSI/SW/CICC/MSCI/OTH return empty DataFrame.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZE".
-            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
-
-        Returns:
-            DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
-        """
-        use_symbol = symbol and symbol.strip()
-        use_market = market and market.strip() if not use_symbol else None
-
-        rq = _get_rqdatac()
-        df = rq.all_instruments(type="INDX", date=trade_date)
-
-        if df is None or df.empty:
-            return self._empty_index_list()
-
-        df = df.reset_index(drop=True)
-
-        if use_symbol:
-            rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
-            if isinstance(rq_symbols, str):
-                rq_symbols = [rq_symbols]
-            df = df[df["order_book_id"].isin(rq_symbols)].reset_index(drop=True)
-        elif use_market:
-            rq_exchanges = [
-                self._MARKET_MAP[m.strip()]
-                for m in market.split(",")
-                if m.strip() in self._MARKET_MAP
-            ]
-            if not rq_exchanges:
-                return self._empty_index_list()
-            df = df[df["exchange"].isin(rq_exchanges)].reset_index(drop=True)
-
-        if df.empty:
-            return self._empty_index_list()
-        result = pd.DataFrame(
-            {
-                "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
-                "date": trade_date,
-                "name": df["symbol"].tolist(),
-                "fullname": df[
-                    "symbol"
-                ].tolist(),  # rqdatac does not provide a separate full name
-                "market": df["exchange"].map(self._REVERSE_MARKET_MAP).tolist(),
-                "base_date": df["base_date"].tolist(),
-                "base_point": df["base_point"].tolist(),
-                "list_date": df["listed_date"].tolist(),
-            }
-        )
-        return result.sort_values("symbol").reset_index(drop=True)
-
-    def get_index_minute_bar(
-        self,
-        symbol: str,
-        frequency: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get minute bar data for an index.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            frequency: one of "1m", "5m", "15m", "30m", "60m"
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
-        """
-        if frequency not in self._MINUTE_FREQ_MAP:
-            raise ValueError(
-                f"frequency must be one of {list(self._MINUTE_FREQ_MAP)}, got '{frequency}'"
-            )
-
-        rq = _get_rqdatac()
-        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
-        if isinstance(rq_symbols, str):
-            rq_symbols = [rq_symbols]
-        rq_symbols = [s for s in rq_symbols if s is not None]
-        if not rq_symbols:
-            return self._empty_index_minute_bar()
-        # 某些指数（如 SSE180.XSHG、SSE50.XSHG）在 rqdatac 内部 validator 会触发
-        # UserWarning 或 Exception（invalid order_book_id）。两种情况均返回空。
-        try:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", category=UserWarning, module="rqdatac.validators"
-                )
-                df = rq.get_price(
-                    rq_symbols,
-                    start_date=start_date,
-                    end_date=end_date,
-                    frequency=self._MINUTE_FREQ_MAP[frequency],
-                    adjust_type="none",
-                    expect_df=True,
-                )
-        except Exception:
-            return self._empty_index_minute_bar()
-        if df is None or df.empty:
-            return self._empty_index_minute_bar()
-        return self._normalize_minute_bar(df, rq)
-
-    def get_index_daily_bar(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get daily bar data for an index.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-        """
-        rq = _get_rqdatac()
-        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
-        if isinstance(rq_symbols, str):
-            rq_symbols = [rq_symbols]
-        rq_symbols = [s for s in rq_symbols if s is not None]
-        if not rq_symbols:
-            return self._empty_index_daily_bar()
-        # 某些指数（如 SSE180.XSHG、SSE50.XSHG）在 rqdatac 内部 validator 会触发
-        # UserWarning 或 Exception（invalid order_book_id）。两种情况均返回空。
-        try:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", category=UserWarning, module="rqdatac.validators"
-                )
-                df = rq.get_price(
-                    rq_symbols,
-                    start_date=start_date,
-                    end_date=end_date,
-                    frequency="1d",
-                    adjust_type="none",
-                    expect_df=True,
-                )
-        except Exception:
-            return self._empty_index_daily_bar()
-        if df is None or df.empty:
-            return self._empty_index_daily_bar()
         return self._normalize_daily_bar(df, rq)

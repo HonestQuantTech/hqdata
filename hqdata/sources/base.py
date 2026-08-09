@@ -108,55 +108,6 @@ class BaseSource(ABC):
             ]
         )
 
-    @staticmethod
-    def _empty_index_list() -> pd.DataFrame:
-        return pd.DataFrame(
-            columns=[
-                "symbol",
-                "date",
-                "name",
-                "fullname",
-                "market",
-                "base_date",
-                "base_point",
-                "list_date",
-            ]
-        )
-
-    @staticmethod
-    def _empty_index_minute_bar() -> pd.DataFrame:
-        return pd.DataFrame(
-            columns=[
-                "symbol",
-                "date",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "turnover",
-                "ets",
-            ]
-        )
-
-    @staticmethod
-    def _empty_index_daily_bar() -> pd.DataFrame:
-        return pd.DataFrame(
-            columns=[
-                "symbol",
-                "date",
-                "pre_close",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "turnover",
-                "change",
-                "pct_change",
-            ]
-        )
-
     @abstractmethod
     def get_calendar(
         self,
@@ -243,69 +194,6 @@ class BaseSource(ABC):
         trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get daily bar data for stocks.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-        """
-        pass
-
-    @abstractmethod
-    def get_index_list(
-        self,
-        symbol: Optional[str] = None,
-        market: Optional[str] = "SSE,SZE",
-        trade_date: Optional[str] = None,
-    ) -> pd.DataFrame:
-        """Get basic info about an index or the index info of a market.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
-            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
-
-        Returns:
-            DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
-        """
-        pass
-
-    @abstractmethod
-    def get_index_minute_bar(
-        self,
-        symbol: str,
-        frequency: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get minute bar data for an index.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            frequency: one of "1m", "5m", "15m", "30m", "60m"
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
-        """
-        pass
-
-    @abstractmethod
-    def get_index_daily_bar(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get daily bar data for an index.
 
         Args:
             symbol: see README, supports comma-separated multiple codes

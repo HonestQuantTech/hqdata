@@ -24,9 +24,6 @@
 | 股票实时快照 | `get_stock_snapshot`   |    ✓    |     ✓     | 含5档盘口                        |
 | 股票日线     | `get_stock_daily_bar`  |    ✓    |     ✓     |                                  |
 | 股票分钟线   | `get_stock_minute_bar` |    ✗    |     ✓     |                                  |
-| 指数列表     | `get_index_list`       |    ✓    |     ✓     | 默认返回 SSE、SZE 指数           |
-| 指数日线     | `get_index_daily_bar`  |    ✓    |     ✓     |                                  |
-| 指数分钟线   | `get_index_minute_bar` |    ✗    |     ✓     |                                  |
 
 另有更多功能，可以前往api.py查看所有功能。
 
@@ -199,26 +196,6 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀，支持以 `,` �
 | "GEM"  | 创业板 |
 | "STAR" | 科创板 |
 | "BSE"  | 北交所 |
-
-#### market（指数市场）
-
-market未指定时，默认为"SSE,SZE"，即只返回上交所和深交所的指数
-
-| 値     | 说明       | 支持源            |
-| ------ | ---------- | ----------------- |
-| "CSI"  | 中证指数   | tushare           |
-| "CICC" | 中金指数   | tushare           |
-| "SSE"  | 上交所指数 | tushare,ricequant |
-| "SZE"  | 深交所指数 | tushare,ricequant |
-| "BSE"  | 北交所指数 | ricequant         |
-| "SW"   | 申万指数   | tushare           |
-| "MSCI" | MSCI 指数  | tushare           |
-| "OTH"  | 其他指数   | tushare           |
-
-特性说明：
-
-* tushare将北交所指数归类到了OTH中
-* ricequant除了3个交易所指数，其他指数的market为NaN
 
 ### 输出参数说明
 

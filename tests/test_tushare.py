@@ -13,8 +13,6 @@ from hqdata.sources.tushare import TushareSource
 from tests.helpers import (
     DATE_PATTERN,
     ETS_PATTERN,
-    INDEX_DAILY_BAR_COLUMNS,
-    INDEX_LIST_COLUMNS,
     STOCK_DAILY_BAR_COLUMNS,
     STOCK_LIST_COLUMNS,
     STOCK_SNAPSHOT_COLUMNS,
@@ -201,54 +199,3 @@ class TestTushareIntegration:
         )
         assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
         assert_daily_bar_sanity(df)
-
-    # -- get_index_list -------------------------------------------------------
-
-    def test_get_index_list_by_symbol(self):
-        """Single symbol returns one row; comma-separated returns each requested index."""
-        df = self.source.get_index_list(symbol="000300.SH")
-        assert_has_columns(df, INDEX_LIST_COLUMNS)
-        assert len(df) == 1, f"Expected single index, got {len(df)} rows"
-        assert df.iloc[0]["symbol"] == "000300.SH"
-
-        df = self.source.get_index_list(symbol="000300.SH,000905.SH")
-        assert set(df["symbol"]) == {"000300.SH", "000905.SH"}
-
-    def test_get_index_list_by_market(self):
-        """Single market filters to that market; multiple markets include each of them."""
-        df = self.source.get_index_list(market="SSE")
-        assert not df.empty, "empty DataFrame for SSE market"
-        assert_has_columns(df, INDEX_LIST_COLUMNS)
-        assert (
-            df["symbol"].str.endswith(".SH").all()
-        ), "Expected symbols to end with .SH for SSE market"
-
-        df = self.source.get_index_list(market="SSE,SZE")
-        assert df["symbol"].str.endswith(".SH").any(), "Expected .SH symbols"
-        assert df["symbol"].str.endswith(".SZ").any(), "Expected .SZ symbols"
-
-    def test_get_index_list_symbol_ignores_market(self):
-        df = self.source.get_index_list(symbol="000300.SH", market="SZE")
-        assert list(df["symbol"]) == ["000300.SH"]
-
-    def test_get_index_list_without_params(self):
-        df = self.source.get_index_list()
-        assert not df.empty, "empty DataFrame with no params"
-        assert_has_columns(df, INDEX_LIST_COLUMNS)
-
-    # -- get_index_daily_bar --------------------------------------------------
-
-    def test_get_index_daily_bar(self):
-        """Well-formed bars for major indexes (incl. CSI), and for a multi-symbol query."""
-        for symbol in ("000300.SH", "000905.SH", "000852.SH", "932000.CSI"):
-            df = self.source.get_index_daily_bar(
-                symbol, "20260101", "20260401", trading_days=57
-            )
-            assert not df.empty, f"{symbol} returned empty DataFrame"
-            assert_has_columns(df, INDEX_DAILY_BAR_COLUMNS)
-            assert_daily_bar_sanity(df)
-
-        df = self.source.get_index_daily_bar(
-            "000300.SH,000905.SH", "20260101", "20260401", trading_days=57
-        )
-        assert set(df["symbol"]) == {"000300.SH", "000905.SH"}
