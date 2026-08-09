@@ -28,9 +28,15 @@ class RicequantSource(BaseSource):
     - Username/password: Set username/password parameters or RQDATA_USERNAME/RQDATA_PASSWORD env vars
     """
 
+    # Verified against real all_instruments(type="CS") data (2026-08): exchange is
+    # always one of XSHE/XSHG/BJSE, confirming BSE maps to BJSE.
     _EXCHANGE_MAP = {"SSE": "XSHG", "SZE": "XSHE", "BSE": "BJSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
+    # Verified against real data back to 2018-01-01 (predating the 2021-04 SZSE
+    # SME-board merger): board_type is always one of MainBoard/GEM/KSH/BJS, never
+    # "SME" — rqdatac retroactively classifies historically-SME stocks as MainBoard
+    # even for historical snapshot dates, so no separate SME handling is needed.
     _BOARD_MAP = {
         "MB": "MainBoard",
         "GEM": "GEM",
@@ -226,8 +232,12 @@ class RicequantSource(BaseSource):
                 "symbol": rq.id_convert(df["order_book_id"].tolist(), to="normal"),
                 "date": [trade_date] * len(df),
                 "name": df["symbol"].tolist(),
-                "exchange": df["exchange"].map(self._REVERSE_EXCHANGE_MAP).tolist(),
-                "board": df["board_type"].map(self._REVERSE_BOARD_MAP).tolist(),
+                "exchange": df["exchange"]
+                .map(lambda x: self._REVERSE_EXCHANGE_MAP.get(x, x))
+                .tolist(),
+                "board": df["board_type"]
+                .map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
+                .tolist(),
                 "industry": df["industry_name"].tolist(),
                 "curr_type": ["CNY"] * len(df),
                 "list_date": df["listed_date"].tolist(),
