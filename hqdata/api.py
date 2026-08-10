@@ -1,6 +1,5 @@
 """hqdata public API - only entry point for upper layers"""
 
-from datetime import date
 from typing import Literal, Optional
 import pandas as pd
 
@@ -136,8 +135,8 @@ def get_stock_list(
         trade_date: snapshot date (YYYYMMDD); defaults to current trading day.
 
     Returns:
-        DataFrame with columns: symbol, date, name, exchange, board, industry,
-        curr_type, list_date, delist_date, is_hs
+        DataFrame with columns: symbol, date, name, exchange, board,
+        curr_type, list_date, delist_date
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
@@ -148,49 +147,6 @@ def get_stock_list(
         symbol=symbol,
         exchange=exchange,
         board=board,
-    )
-
-
-def get_stock_snapshot(symbol: str) -> pd.DataFrame:
-    """Get real-time stock snapshot with 5-level order book.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes
-
-    Returns:
-        DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
-        volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    return _source.get_stock_snapshot(symbol)
-
-
-def get_stock_minute_bar(
-    symbol: str,
-    frequency: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> pd.DataFrame:
-    """Get minute bar data for stocks.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes
-        frequency: one of "1m", "5m", "15m", "30m", "60m"
-        start_date: see README
-        end_date: see README
-
-    Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = get_current_trading_day()
-    start_date = start_date or today
-    end_date = end_date or today
-    trading_days = count_trading_days(start_date, end_date)
-    return _source.get_stock_minute_bar(
-        symbol, frequency, start_date, end_date, trading_days
     )
 
 
@@ -218,72 +174,16 @@ def get_stock_daily_bar(
     return _source.get_stock_daily_bar(symbol, start_date, end_date, trading_days)
 
 
-def get_index_list(
-    symbol: Optional[str] = None,
-    market: Optional[str] = "SSE,SZE",
-) -> pd.DataFrame:
-    """Get basic info about an index or the index info of a market.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-        market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZSE".
-
-    Returns:
-        DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    trade_date = get_current_trading_day()
-    return _source.get_index_list(symbol, market, trade_date)
-
-
-def get_index_minute_bar(
-    symbol: str,
-    frequency: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> pd.DataFrame:
-    """Get minute bar data for an index.
+def get_stock_snapshot(symbol: str) -> pd.DataFrame:
+    """Get real-time stock snapshot with 5-level order book.
 
     Args:
         symbol: see README, supports comma-separated multiple codes
-        frequency: one of "1m", "5m", "15m", "30m", "60m"
-        start_date: see README
-        end_date: see README
 
     Returns:
-        DataFrame with columns: symbol, date, open, high, low, close, volume, turnover, ets
+        DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
+        volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
     """
     if _source is None:
         raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = get_current_trading_day()
-    start_date = start_date or today
-    end_date = end_date or today
-    trading_days = count_trading_days(start_date, end_date)
-    return _source.get_index_minute_bar(
-        symbol, frequency, start_date, end_date, trading_days
-    )
-
-
-def get_index_daily_bar(
-    symbol: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> pd.DataFrame:
-    """Get daily bar data for an index.
-
-    Args:
-        symbol: see README, supports comma-separated multiple codes
-        start_date: see README
-        end_date: see README
-
-    Returns:
-        DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-    """
-    if _source is None:
-        raise RuntimeError("Data source not initialized. Call init_source() first.")
-    today = get_current_trading_day()
-    start_date = start_date or today
-    end_date = end_date or today
-    trading_days = count_trading_days(start_date, end_date)
-    return _source.get_index_daily_bar(symbol, start_date, end_date, trading_days)
+    return _source.get_stock_snapshot(symbol)

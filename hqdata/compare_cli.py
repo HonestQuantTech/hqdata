@@ -20,11 +20,9 @@ _STOCK_LIST_COLUMNS = [
     "name",
     "exchange",
     "board",
-    "industry",
     "curr_type",
     "list_date",
     "delist_date",
-    "is_hs",
 ]
 
 _DIFF_COLUMNS = [
@@ -142,9 +140,9 @@ def _diff_file_presence(
 ) -> list[dict[str, object]]:
     """Diff rows for file-level presence: non-trading-day files and one-sided files.
 
-    Shared by every per-date compare command (stock-list, index-list, stock-daily,
-    index-daily): each of these stores one file per trading day, so file presence
-    should always agree with each source's own calendar.csv and with the other source.
+    Shared by every per-date compare command (stock-list, stock-daily): each of
+    these stores one file per trading day, so file presence should always agree
+    with each source's own calendar.csv and with the other source.
     """
     rows: list[dict[str, object]] = []
 
@@ -259,11 +257,9 @@ def _load_stock_list_csv(path: Path, source: str) -> pd.DataFrame:
     normalized["name"] = normalized["name"].map(_normalize_text)
     normalized["exchange"] = normalized["exchange"].map(_normalize_exchange)
     normalized["board"] = normalized["board"].map(_normalize_text).str.upper()
-    normalized["industry"] = normalized["industry"].map(_normalize_text)
     normalized["curr_type"] = normalized["curr_type"].map(_normalize_text).str.upper()
     normalized["list_date"] = normalized["list_date"].map(_normalize_basic_date)
     normalized["delist_date"] = normalized["delist_date"].map(_normalize_basic_date)
-    normalized["is_hs"] = normalized["is_hs"].map(_normalize_text).str.upper()
 
     _validate_date_matches_filename(normalized, path, source, "stock_list")
 

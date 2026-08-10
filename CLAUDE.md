@@ -23,29 +23,23 @@ pytest tests/test_tushare.py::TestTushareIntegration::test_get_stock_daily_bar
 `hqdata` 是 HonestQuant 量化系统的数据基础层。上层（策略、引擎）**只调用 `hqdata.api`**，不直接接触任何数据源 SDK。
 
 ```
-hqdata/api.py           # 公开接口：init_source()、get_stock_daily_bar()、get_stock_minute_bar()、get_stock_list()、get_index_list()、get_index_daily_bar()、get_index_minute_bar()
+hqdata/api.py           # 公开接口：init_source()、get_stock_daily_bar()、get_stock_list()
 hqdata/sources/
   base.py               # BaseSource 抽象基类，定义接口规范
-  tushare.py            # Tushare 适配器（支持日线、分钟线；股票列表、指数）
-  ricequant.py          # 米筐适配器（支持日线/分钟线；股票列表、指数列表）
+  tushare.py            # Tushare 适配器（支持日线、股票列表）
+  ricequant.py          # 米筐适配器（支持日线、股票列表）
 hqdata/config.py        # 在 import 时从项目根目录加载 .env
 ```
 
-**新增数据源：** 继承 `BaseSource`，实现 `get_stock_daily_bar()`、`get_stock_minute_bar()`、`get_stock_list()`、`get_index_list()`、`get_index_daily_bar()`、`get_index_minute_bar()`，在 `api.py:init_source()` 中注册。
+**新增数据源：** 继承 `BaseSource`，实现 `get_stock_daily_bar()`、`get_stock_list()`，在 `api.py:init_source()` 中注册。
 
 ## 关键约定
 
 - **股票代码格式：** `代码.交易所`，如 `600000.SH`（上交所）、`000001.SZ`（深交所）
-- **指数代码格式：** 同股票代码，如 `000300.SH`（沪深300）、`000905.SH`
 - **股票交易所参数（`get_stock_list` 的 `exchange`）：** `SSE`（上交所）| `SZE`（深交所）| `BSE`（北交所）；各数据源适配器内部负责与原生值（如 `SZSE`、`XSHE`、`BJSE`）互转，上层调用者和返回 DataFrame 只见这三种值
 - **股票板块参数（`get_stock_list` 的 `board`）：** `MB`（主板）| `GEM`（创业板）| `STAR`（科创板）| `BSE`（北交所）；各数据源适配器内部负责与原生值互转，上层调用者和返回 DataFrame 只见这四种值
-- **指数市场参数（`get_index_list` 的 `market`）：** `SSE`（上交所）| `SZE`（深交所）| `BSE`（北交所） | `CSI`（中证）| `CICC`（中金）| `SW`（申万）| `MSCI` | `OTH`（其他）；其中 SZE/BSE 各数据源适配器内部负责与原生值互转，上层只见这些标准值；默认为 `"SSE,SZE"`
 - **日期格式：** `YYYYMMDD` 字符串
-- **频率参数（分钟线）：** `"1m"` | `"5m"` | `"15m"` | `"30m"` | `"60m"`
-  - Tushare：需更高权限，调用 `stk_mins` / `idx_mins`
-  - Ricequant：支持全部分钟频率
 - **凭据配置：** 从项目根目录的 `.env` 加载（参考 `.env.example`）
-- `pyproject.toml` 已被 gitignore，需在本地手动创建
 
 ## 开发规范
 
@@ -56,7 +50,7 @@ hqdata/config.py        # 在 import 时从项目根目录加载 .env
 改上层接口（`api.py` / `__init__.py`）后，必须检查下层接口（`sources/*.py`）和测试文件是否需要联动改动，确保代码库各处一致。
 
 ### 参数描述一致性
-同一参数（如 `symbol`、`frequency`、`date`）在不同数据源的 docstring 和 error message 中描述必须完全一致，不能有的地方写 `.SH/.SZ`，有的地方写 `.XSHG/.XSHE`。
+同一参数（如 `symbol`、`exchange`、`date`）在不同数据源的 docstring 和 error message 中描述必须完全一致，不能有的地方写 `.SH/.SZ`，有的地方写 `.XSHG/.XSHE`。
 
 ### 读取 API 文档规范
 读取 API 文档时要仔细，确保完全理解了再动手实现。不要对 API 参数格式做假设或猜测，要严格按照文档来。

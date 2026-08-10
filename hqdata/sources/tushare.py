@@ -14,7 +14,11 @@ def _get_tushare():
         import tushare as ts
     except ImportError:
         raise ImportError(
-            "tushare 未安装，hqdata不会默认安装您不一定需要的依赖。请运行：pip install hqdata[tushare]开启对tushare的支持。"
+            """tushare is not installed. 
+            
+            hqdata does not install dependencies you may not need by default. 
+            Please run: pip install hqdata[tushare] to enable tushare support.
+            """
         ) from None
     return ts
 
@@ -68,14 +72,14 @@ class TushareSource(BaseSource):
     _EXCHANGE_MAP = {"SSE": "SSE", "SZE": "SZSE", "BSE": "BSE"}
     _REVERSE_EXCHANGE_MAP = {v: k for k, v in _EXCHANGE_MAP.items()}
 
-    _MARKET_MAP = {"SZE": "SZSE"}
-    _REVERSE_MARKET_MAP = {"SZSE": "SZE"}
+    _STOCK_LIST_FIELDS = "ts_code,name,market,exchange,curr_type,list_date,delist_date"
 
-    _STOCK_LIST_FIELDS = (
-        "ts_code,name,industry,market,exchange,curr_type,list_date,delist_date,is_hs"
-    )
-
-    _INDEX_LIST_FIELDS = "ts_code,name,fullname,market,base_date,base_point,list_date"
+    @staticmethod
+    def _map_comma_separated(value: str, mapping: dict[str, str]) -> str:
+        """Map comma-separated values while preserving unknown values."""
+        return ",".join(
+            mapping.get(item.strip(), item.strip()) for item in value.split(",")
+        )
 
     @staticmethod
     def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -160,25 +164,16 @@ class TushareSource(BaseSource):
             board: see README, supports comma-separated multiple codes
 
         Returns:
-            DataFrame with columns: symbol, date, name, exchange, board, industry,
-            curr_type, list_date, delist_date, is_hs
+            DataFrame with columns: symbol, date, name, exchange, board,
+            curr_type, list_date, delist_date
         """
         # Map English board abbreviations to Chinese names for tushare API
         if board:
-            market_names = []
-            for m in board.split(","):
-                m = m.strip()
-                market_names.append(self._BOARD_MAP.get(m, m))
-            board = ",".join(market_names)
+            board = self._map_comma_separated(board, self._BOARD_MAP)
 
         # Map exchange to tushare native values (e.g. SZE → SZSE)
-        ts_exchange = None
         if exchange:
-            ts_exchanges = [
-                self._EXCHANGE_MAP.get(e.strip(), e.strip())
-                for e in exchange.split(",")
-            ]
-            ts_exchange = ",".join(ts_exchanges)
+            exchange = self._map_comma_separated(exchange, self._EXCHANGE_MAP)
 
         # stock_basic API returns at most 6000 rows per call.
         # Query listed + delisted names once, then reconstruct the requested universe
@@ -186,7 +181,7 @@ class TushareSource(BaseSource):
         self._rate_limiter.acquire()
         df = self.pro.stock_basic(
             ts_code=symbol,
-            exchange=ts_exchange,
+            exchange=exchange,
             market=board,
             list_status="L,D",
             fields=self._STOCK_LIST_FIELDS,
@@ -218,7 +213,6 @@ class TushareSource(BaseSource):
             lambda x: self._REVERSE_EXCHANGE_MAP.get(x, x)
         )
         df["market"] = df["market"].map(lambda x: self._REVERSE_BOARD_MAP.get(x, x))
-        df["is_hs"] = df["is_hs"].map({"H": "Y", "S": "Y", "N": "N"}).fillna("N")
         df = df.rename(columns={"market": "board"})
         cols = [
             "symbol",
@@ -226,13 +220,80 @@ class TushareSource(BaseSource):
             "name",
             "exchange",
             "board",
-            "industry",
             "curr_type",
             "list_date",
             "delist_date",
-            "is_hs",
         ]
         return df[cols]
+
+    def get_stock_daily_bar(
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Get daily bar data for stocks.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            start_date: see README
+            end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
+
+        Returns:
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
+        """
+        if trading_days is None:
+            return self._empty_stock_daily_bar()
+        if trading_days == 0:
+            return self._empty_stock_daily_bar()
+
+        symbols = [s.strip() for s in symbol.split(",")]
+
+        # daily API enforces two per-call limits (the second is undocumented but
+        # verified empirically: 1000 codes succeed, 1001 raise 列表个数超过限制1000个):
+        #   - at most 6000 rows returned
+        #   - at most 1000 ts_code entries per request
+        chunk_size = max(1, min(5900 // trading_days, 1000))
+
+        chunks = [
+            symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
+        ]
+        dfs = []
+        for chunk in chunks:
+            self._rate_limiter.acquire()
+            d = self.pro.daily(
+                ts_code=",".join(chunk), start_date=start_date, end_date=end_date
+            )
+            if d is None or d.empty:
+                continue
+            if len(d) >= 6000:
+                print(
+                    f"[hqdata][tushare] daily returned {len(d)} rows which meets or exceeds "
+                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
+                )
+                return self._empty_stock_daily_bar()
+            dfs.append(d)
+        df = pd.concat(dfs, ignore_index=True) if dfs else None
+
+        if df is None or df.empty:
+            return self._empty_stock_daily_bar()
+        df = self._rename_columns(df).sort_values(["symbol", "date"])
+        cols = [
+            "symbol",
+            "date",
+            "pre_close",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "turnover",
+            "change",
+            "pct_change",
+        ]
+        return df[cols].reset_index(drop=True)
 
     def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
         """Get real-time stock snapshot with 5-level order book.
@@ -337,252 +398,3 @@ class TushareSource(BaseSource):
             "bv5",
         ]
         return df[cols].sort_values(["ets", "symbol"]).reset_index(drop=True)
-
-    def get_stock_minute_bar(
-        self,
-        symbol: str,
-        frequency: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get minute bar data for stocks.
-
-        Note:
-            Not implemented for Tushare. The stk_mins API requires additional subscription
-            permissions (分钟线独立权限) that are not currently enabled and cannot be tested.
-            Once permission is available, refer to the git history for a working batching
-            implementation using stk_mins with
-            chunk_size = 7900 // (trading_days * bars_per_day).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError(
-            "[hqdata][tushare] get_stock_minute_bar 尚未实现：stk_mins API 需要独立的分钟线权限，"
-            "当前账户未开通，无法进行测试。权限开通后可参考 git 历史记录中的实现。"
-        )
-
-    def get_stock_daily_bar(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get daily bar data for stocks.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-        """
-        if trading_days is None:
-            return self._empty_stock_daily_bar()
-        if trading_days == 0:
-            return self._empty_stock_daily_bar()
-
-        symbols = [s.strip() for s in symbol.split(",")]
-
-        # daily API returns at most 6000 rows per call.
-        # chunk_size = floor(5900 / trading_days), at least 1
-        chunk_size = max(1, 5900 // trading_days)
-
-        chunks = [
-            symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
-        ]
-        dfs = []
-        for chunk in chunks:
-            self._rate_limiter.acquire()
-            d = self.pro.daily(
-                ts_code=",".join(chunk), start_date=start_date, end_date=end_date
-            )
-            if d is None or d.empty:
-                continue
-            if len(d) >= 6000:
-                print(
-                    f"[hqdata][tushare] daily returned {len(d)} rows which meets or exceeds "
-                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
-                )
-                return self._empty_stock_daily_bar()
-            dfs.append(d)
-        df = pd.concat(dfs, ignore_index=True) if dfs else None
-
-        if df is None or df.empty:
-            return self._empty_stock_daily_bar()
-        df = self._rename_columns(df).sort_values(["symbol", "date"])
-        cols = [
-            "symbol",
-            "date",
-            "pre_close",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-            "change",
-            "pct_change",
-        ]
-        return df[cols].reset_index(drop=True)
-
-    def get_index_list(
-        self,
-        symbol: Optional[str] = None,
-        market: Optional[str] = "SSE,SZE",
-        trade_date: Optional[str] = None,
-    ) -> pd.DataFrame:
-        """Get basic info about an index or the index info of a market.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes. If provided, market is ignored.
-            market: see README, supports comma-separated multiple markets. Defaults to "SSE,SZE".
-            trade_date: snapshot date (YYYYMMDD); injected by api layer, defaults to current trading day
-
-        Returns:
-            DataFrame with columns: symbol, date, name, fullname, market, base_date, base_point, list_date
-        """
-        use_symbol = symbol and symbol.strip()
-        use_market = market and market.strip() if not use_symbol else None
-
-        # index_basic API returns at most 8000 rows per call.
-        # If the result hits this limit, data is likely truncated — treat as error.
-        if use_symbol:
-            symbols = [s.strip() for s in symbol.split(",")]
-            dfs = []
-            for s in symbols:
-                self._rate_limiter.acquire()
-                df = self.pro.index_basic(ts_code=s, fields=self._INDEX_LIST_FIELDS)
-                if df is not None and not df.empty:
-                    dfs.append(df)
-            df = pd.concat(dfs, ignore_index=True) if dfs else None
-        elif use_market:
-            markets = [m.strip() for m in market.split(",")]
-            dfs = []
-            for m in markets:
-                ts_market = self._MARKET_MAP.get(m, m)
-                self._rate_limiter.acquire()
-                df = self.pro.index_basic(
-                    market=ts_market, fields=self._INDEX_LIST_FIELDS
-                )
-                if df is not None and not df.empty:
-                    dfs.append(df)
-            df = pd.concat(dfs, ignore_index=True) if dfs else None
-        else:
-            self._rate_limiter.acquire()
-            df = self.pro.index_basic(fields=self._INDEX_LIST_FIELDS)
-
-        if df is None or df.empty:
-            return self._empty_index_list()
-        if len(df) >= 8000:
-            print(
-                f"[hqdata][tushare] get_index_list() returned {len(df)} rows which meets or exceeds "
-                "the 8000-row API limit — data may be truncated. Returning empty DataFrame."
-            )
-            return self._empty_index_list()
-        df = self._rename_columns(df).sort_values("symbol")
-        df["date"] = trade_date
-        df["market"] = df["market"].map(lambda x: self._REVERSE_MARKET_MAP.get(x, x))
-        cols = [
-            "symbol",
-            "date",
-            "name",
-            "fullname",
-            "market",
-            "base_date",
-            "base_point",
-            "list_date",
-        ]
-        return df[cols]
-
-    def get_index_minute_bar(
-        self,
-        symbol: str,
-        frequency: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get minute bar data for an index.
-
-        Note:
-            Not implemented for Tushare. The idx_mins API requires additional subscription
-            permissions (分钟线独立权限) that are not currently enabled and cannot be tested.
-            Once permission is available, refer to the git history for a working batching
-            implementation using idx_mins with
-            chunk_size = 7900 // (trading_days * bars_per_day).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError(
-            "[hqdata][tushare] get_index_minute_bar 尚未实现：idx_mins API 需要独立的分钟线权限，"
-            "当前账户未开通，无法进行测试。权限开通后可参考 git 历史记录中的实现。"
-        )
-
-    def get_index_daily_bar(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get daily bar data for an index.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-        """
-        if trading_days is None:
-            return self._empty_index_daily_bar()
-        if trading_days == 0:
-            return self._empty_index_daily_bar()
-
-        symbols = [s.strip() for s in symbol.split(",")]
-
-        # index_daily API only accepts a single ts_code per call (unlike daily).
-        # Iterate symbol by symbol; each call returns at most trading_days rows,
-        # so the 8000-row limit is only a concern for very long date ranges.
-        dfs = []
-        for s in symbols:
-            self._rate_limiter.acquire()
-            d = self.pro.index_daily(
-                ts_code=s, start_date=start_date, end_date=end_date
-            )
-            if d is None or d.empty:
-                continue
-            if len(d) >= 8000:
-                print(
-                    f"[hqdata][tushare] index_daily returned {len(d)} rows which meets or exceeds "
-                    "the 8000-row API limit — data may be truncated. Returning empty DataFrame."
-                )
-                return self._empty_index_daily_bar()
-            dfs.append(d)
-        df = pd.concat(dfs, ignore_index=True) if dfs else None
-
-        if df is None or df.empty:
-            return self._empty_index_daily_bar()
-        df = self._rename_columns(df).sort_values(["symbol", "date"])
-        cols = [
-            "symbol",
-            "date",
-            "pre_close",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-            "change",
-            "pct_change",
-        ]
-        return df[cols].reset_index(drop=True)

@@ -23,10 +23,6 @@
 | 股票列表     | `get_stock_list`       |    ✓    |     ✓     | 获取指定交易日当天的上市股票列表 |
 | 股票实时快照 | `get_stock_snapshot`   |    ✓    |     ✓     | 含5档盘口                        |
 | 股票日线     | `get_stock_daily_bar`  |    ✓    |     ✓     |                                  |
-| 股票分钟线   | `get_stock_minute_bar` |    ✗    |     ✓     |                                  |
-| 指数列表     | `get_index_list`       |    ✓    |     ✓     | 默认返回 SSE、SZE 指数           |
-| 指数日线     | `get_index_daily_bar`  |    ✓    |     ✓     |                                  |
-| 指数分钟线   | `get_index_minute_bar` |    ✗    |     ✓     |                                  |
 
 另有更多功能，可以前往api.py查看所有功能。
 
@@ -165,16 +161,6 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀，支持以 `,` �
 - `start_date`：开始日期（包含）
 - `end_date`：结束日期（包含）
 
-#### frequency（频率）
-
-| 值    | 说明     | 支持源    |
-| ----- | -------- | --------- |
-| "1m"  | 1分钟线  | ricequant |
-| "5m"  | 5分钟线  | ricequant |
-| "15m" | 15分钟线 | ricequant |
-| "30m" | 30分钟线 | ricequant |
-| "60m" | 60分钟线 | ricequant |
-
 #### exchange（交易所）
 
 | 代码  | 说明           |
@@ -200,31 +186,13 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀，支持以 `,` �
 | "STAR" | 科创板 |
 | "BSE"  | 北交所 |
 
-#### market（指数市场）
-
-market未指定时，默认为"SSE,SZE"，即只返回上交所和深交所的指数
-
-| 値     | 说明       | 支持源            |
-| ------ | ---------- | ----------------- |
-| "CSI"  | 中证指数   | tushare           |
-| "CICC" | 中金指数   | tushare           |
-| "SSE"  | 上交所指数 | tushare,ricequant |
-| "SZE"  | 深交所指数 | tushare,ricequant |
-| "BSE"  | 北交所指数 | ricequant         |
-| "SW"   | 申万指数   | tushare           |
-| "MSCI" | MSCI 指数  | tushare           |
-| "OTH"  | 其他指数   | tushare           |
-
-特性说明：
-
-* tushare将北交所指数归类到了OTH中
-* ricequant除了3个交易所指数，其他指数的market为NaN
-
 ### 输出参数说明
 
 #### volume（成交量）
 
-单位：手（lots，1手=100股，科创板1手=200股）
+单位：手（lots，1手=100股）
+
+各板块（含科创板）成交量统一按 1手=100股 折算，不受"科创板最低买入200股"这一交易规则影响（后者是申报单位限制，不是成交量统计口径）
 
 #### turnover（成交额）
 

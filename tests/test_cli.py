@@ -22,24 +22,9 @@ STOCK_LIST_DF = pd.DataFrame(
         "name": ["浦发银行", "平安银行"],
         "exchange": ["SSE", "SZE"],
         "board": ["MB", "MB"],
-        "industry": ["银行", "银行"],
         "curr_type": ["CNY", "CNY"],
         "list_date": ["19991110", "19910403"],
         "delist_date": ["", ""],
-        "is_hs": ["N", "Y"],
-    }
-)
-
-INDEX_LIST_DF = pd.DataFrame(
-    {
-        "symbol": ["000300.SH", "000905.SH"],
-        "date": ["20260101", "20260101"],
-        "name": ["沪深300", "中证500"],
-        "fullname": ["沪深300指数", "中证500指数"],
-        "market": ["CSI", "CSI"],
-        "base_date": ["20041231", "20041231"],
-        "base_point": [1000.0, 1000.0],
-        "list_date": ["20050404", "20070115"],
     }
 )
 
@@ -56,20 +41,6 @@ DAILY_BAR_DF = pd.DataFrame(
         "turnover": [10200.0],
         "change": [0.2],
         "pct_change": [2.0],
-    }
-)
-
-MINUTE_BAR_DF = pd.DataFrame(
-    {
-        "symbol": ["600000.SH"],
-        "date": ["20260102"],
-        "open": [10.1],
-        "high": [10.2],
-        "low": [10.0],
-        "close": [10.15],
-        "volume": [100],
-        "turnover": [1015.0],
-        "ets": ["20260102T093000000"],
     }
 )
 
@@ -102,30 +73,18 @@ def api():
         patch("hqdata.cli.hqdata.get_current_trading_day") as current_trading_day,
         patch("hqdata.cli.hqdata.get_calendar") as calendar,
         patch("hqdata.cli.hqdata.get_stock_list") as stock_list,
-        patch("hqdata.cli.hqdata.get_stock_minute_bar") as stock_minute_bar,
         patch("hqdata.cli.hqdata.get_stock_daily_bar") as stock_daily_bar,
-        patch("hqdata.cli.hqdata.get_index_list") as index_list,
-        patch("hqdata.cli.hqdata.get_index_minute_bar") as index_minute_bar,
-        patch("hqdata.cli.hqdata.get_index_daily_bar") as index_daily_bar,
     ):
         current_trading_day.return_value = "20260102"
         calendar.return_value = make_calendar("20260102")
         stock_list.side_effect = _stock_list_stub
-        stock_minute_bar.return_value = MINUTE_BAR_DF
         stock_daily_bar.return_value = DAILY_BAR_DF
-        index_list.return_value = INDEX_LIST_DF
-        index_minute_bar.return_value = MINUTE_BAR_DF
-        index_daily_bar.return_value = DAILY_BAR_DF
         yield SimpleNamespace(
             init_source=init_source,
             current_trading_day=current_trading_day,
             calendar=calendar,
             stock_list=stock_list,
-            stock_minute_bar=stock_minute_bar,
             stock_daily_bar=stock_daily_bar,
-            index_list=index_list,
-            index_minute_bar=index_minute_bar,
-            index_daily_bar=index_daily_bar,
         )
 
 
@@ -152,18 +111,9 @@ class TestCLIDefaults:
         assert_success(result)
         assert (tmp_path / "tushare" / "stock_list" / "20260102.csv").exists()
 
-    def test_stock_minute_invalid_frequency(self, runner):
-        result = runner.invoke(cli, ["stock-minute", "--frequency", "2m"])
-        assert result.exit_code != 0
-
     def test_calendar_requires_start_end(self, runner):
         result = runner.invoke(cli, ["calendar"])
         assert result.exit_code != 0
-
-    def test_index_list_default_market(self, runner, api, tmp_path):
-        result = runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
-        assert_success(result)
-        api.index_list.assert_called_once_with(market="SSE,SZE")
 
     def test_default_output_expanduser(self, runner, api):
         """Default output ~/.hqdata must be expanded (not literal ~) in echoed paths."""
@@ -303,39 +253,6 @@ class TestFetchStockList:
 
 
 # ---------------------------------------------------------------------------
-# stock-minute
-# ---------------------------------------------------------------------------
-
-
-class TestFetchStockMinute:
-    def test_writes_csv_per_date_and_passes_frequency(self, runner, api, tmp_path):
-        api.calendar.return_value = make_calendar("20260401", "20260402")
-        result = runner.invoke(
-            cli,
-            [
-                "--output",
-                str(tmp_path),
-                "stock-minute",
-                "--start",
-                "20260401",
-                "--end",
-                "20260407",
-                "--frequency",
-                "15m",
-            ],
-        )
-        assert_success(result)
-        # Output file is named after the bar data's date column
-        assert (tmp_path / "tushare" / "stock_minute" / "20260102.csv").exists()
-        assert len(api.stock_minute_bar.call_args_list) == 2
-        for expected_day, c in zip(
-            ["20260401", "20260402"], api.stock_minute_bar.call_args_list
-        ):
-            assert c.args[1] == "15m"
-            assert c.kwargs == {"start_date": expected_day, "end_date": expected_day}
-
-
-# ---------------------------------------------------------------------------
 # stock-daily
 # ---------------------------------------------------------------------------
 
@@ -427,64 +344,16 @@ class TestFetchStockDaily:
         out_dir = tmp_path / "tushare" / "stock_daily"
         assert not out_dir.exists() or not any(out_dir.glob("*.csv"))
 
-
-# ---------------------------------------------------------------------------
-# index-list
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexList:
-    def test_writes_today_csv(self, runner, api, tmp_path):
-        result = runner.invoke(cli, ["--output", str(tmp_path), "index-list"])
-        assert_success(result)
-        assert (tmp_path / "tushare" / "index_list" / "20260102.csv").exists()
-
-    def test_market_passed_to_api(self, runner, api, tmp_path):
-        result = runner.invoke(
-            cli, ["--output", str(tmp_path), "index-list", "--market", "CSI"]
-        )
-        assert_success(result)
-        api.index_list.assert_called_once_with(market="CSI")
-
-
-# ---------------------------------------------------------------------------
-# index-minute
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexMinute:
-    def test_writes_csv_per_date(self, runner, api, tmp_path):
+    def test_error_on_later_day_preserves_earlier_writes(self, runner, api, tmp_path):
+        """A day already written to disk must survive an error on a later day."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        api.stock_daily_bar.side_effect = [DAILY_BAR_DF, RuntimeError("API error")]
         result = runner.invoke(
             cli,
             [
                 "--output",
                 str(tmp_path),
-                "index-minute",
-                "--start",
-                "20260401",
-                "--end",
-                "20260407",
-                "--frequency",
-                "1m",
-            ],
-        )
-        assert_success(result)
-        assert (tmp_path / "tushare" / "index_minute" / "20260102.csv").exists()
-
-
-# ---------------------------------------------------------------------------
-# index-daily
-# ---------------------------------------------------------------------------
-
-
-class TestFetchIndexDaily:
-    def test_writes_csv_per_date(self, runner, api, tmp_path):
-        result = runner.invoke(
-            cli,
-            [
-                "--output",
-                str(tmp_path),
-                "index-daily",
+                "stock-daily",
                 "--start",
                 "20260101",
                 "--end",
@@ -492,7 +361,32 @@ class TestFetchIndexDaily:
             ],
         )
         assert_success(result)
-        assert (tmp_path / "tushare" / "index_daily" / "20260102.csv").exists()
+        assert "ERROR" in result.output
+        assert (tmp_path / "tushare" / "stock_daily" / "20260102.csv").exists()
+        assert not (tmp_path / "tushare" / "stock_daily" / "20260103.csv").exists()
+
+    def test_existing_file_is_skipped(self, runner, api, tmp_path):
+        """A day already on disk is not re-fetched on re-run."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        out_dir = tmp_path / "tushare" / "stock_daily"
+        out_dir.mkdir(parents=True)
+        (out_dir / "20260102.csv").write_text("placeholder")
+
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-daily",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert api.stock_list.call_args_list == [call(trade_date="20260103")]
+        assert (out_dir / "20260102.csv").read_text() == "placeholder"
 
 
 # ---------------------------------------------------------------------------
@@ -521,11 +415,9 @@ _STOCK_ROW = {
     "name": "平安银行",
     "exchange": "SZE",
     "board": "MB",
-    "industry": "银行",
     "curr_type": "CNY",
     "list_date": "19910403",
     "delist_date": "",
-    "is_hs": "Y",
 }
 
 _STOCK_COLUMNS = list(STOCK_LIST_DF.columns)
@@ -596,7 +488,6 @@ class TestCompareStockList:
                     "name": "样本退",
                     "exchange": "BSE",
                     "board": "BSE",
-                    "is_hs": "N",
                 }
             ],
         )
@@ -610,7 +501,6 @@ class TestCompareStockList:
                     "name": "*ST样本",
                     "exchange": "BJSE",
                     "board": "BSE",
-                    "industry": "货币金融服务",
                     "curr_type": "cny",
                     "list_date": "1991-04-03",
                     "delist_date": "0000-00-00",
@@ -636,8 +526,6 @@ class TestCompareStockList:
                 {
                     "symbol": "000002.SZ",
                     "name": "万科A",
-                    "industry": "地产",
-                    "is_hs": "N",
                 },
             ],
         )
