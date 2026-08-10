@@ -13,11 +13,13 @@ def _get_tushare():
     try:
         import tushare as ts
     except ImportError:
-        raise ImportError("""tushare is not installed. 
+        raise ImportError(
+            """tushare is not installed. 
             
             hqdata does not install dependencies you may not need by default. 
             Please run: pip install hqdata[tushare] to enable tushare support.
-            """) from None
+            """
+        ) from None
     return ts
 
 
