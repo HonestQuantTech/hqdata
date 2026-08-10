@@ -149,6 +149,7 @@ def get_stock_list(
         board=board,
     )
 
+
 def get_stock_daily_bar(
     symbol: str,
     start_date: Optional[str] = None,

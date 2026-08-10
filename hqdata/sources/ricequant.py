@@ -13,11 +13,13 @@ def _get_rqdatac():
     try:
         import rqdatac as rq
     except ImportError:
-        raise ImportError("""rqdatac is not installed.
+        raise ImportError(
+            """rqdatac is not installed.
              
             hqdata does not install dependencies you may not need by default.
             Please run: pip install hqdata[ricequant] to enable ricequant support.
-            """) from None
+            """
+        ) from None
     return rq
 
 
