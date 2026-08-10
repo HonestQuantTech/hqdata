@@ -132,19 +132,6 @@ class BaseSource(ABC):
         pass
 
     @abstractmethod
-    def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
-        """Get real-time stock snapshot with 5-level order book.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-
-        Returns:
-            DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
-            volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
-        """
-        pass
-
-    @abstractmethod
     def get_stock_daily_bar(
         self,
         symbol: str,
@@ -162,5 +149,18 @@ class BaseSource(ABC):
 
         Returns:
             DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
+        """
+        pass
+
+    @abstractmethod
+    def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
+        """Get real-time stock snapshot with 5-level order book.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+
+        Returns:
+            DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
+            volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
         """
         pass

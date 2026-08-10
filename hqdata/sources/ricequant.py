@@ -13,9 +13,11 @@ def _get_rqdatac():
     try:
         import rqdatac as rq
     except ImportError:
-        raise ImportError(
-            "rqdatac 未安装，hqdata不会默认安装您不一定需要的依赖。请运行：pip install hqdata[ricequant]开启对ricequant的支持。"
-        ) from None
+        raise ImportError("""rqdatac is not installed.
+             
+            hqdata does not install dependencies you may not need by default.
+            Please run: pip install hqdata[ricequant] to enable ricequant support.
+            """) from None
     return rq
 
 
@@ -224,6 +226,70 @@ class RicequantSource(BaseSource):
         )
         return result.sort_values("symbol").reset_index(drop=True)
 
+    def get_stock_daily_bar(
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Get daily bar data for stocks.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            start_date: see README
+            end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
+
+        Returns:
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
+        """
+        rq = _get_rqdatac()
+        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
+        if isinstance(rq_symbols, str):
+            rq_symbols = [rq_symbols]
+        df = rq.get_price(
+            rq_symbols,
+            start_date=start_date,
+            end_date=end_date,
+            frequency="1d",
+            adjust_type="none",
+            expect_df=True,
+        )
+        if df is None or df.empty:
+            return self._empty_stock_daily_bar()
+
+        df = df.reset_index()
+        df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
+        df["date"] = df["date"].dt.strftime("%Y%m%d")
+        df = df.rename(
+            columns={"total_turnover": "turnover", "prev_close": "pre_close"}
+        )
+        if "pre_close" not in df.columns:
+            df["pre_close"] = float("nan")
+        df["change"] = (df["close"] - df["pre_close"]).round(4)
+        pct = (df["change"] / df["pre_close"]) * 100
+        df["pct_change"] = pct.replace(
+            [float("inf"), float("-inf")], float("nan")
+        ).round(4)
+        # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
+        if "volume" in df.columns:
+            df["volume"] = (df["volume"] / 100).astype("int64")
+        cols = [
+            "symbol",
+            "date",
+            "pre_close",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "turnover",
+            "change",
+            "pct_change",
+        ]
+        return df[cols].sort_values(["symbol", "date"]).reset_index(drop=True)
+
     def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
         """Get real-time stock snapshot with 5-level order book.
 
@@ -309,67 +375,3 @@ class RicequantSource(BaseSource):
             .sort_values(["ets", "symbol"])
             .reset_index(drop=True)
         )
-
-    def get_stock_daily_bar(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get daily bar data for stocks.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-        """
-        rq = _get_rqdatac()
-        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
-        if isinstance(rq_symbols, str):
-            rq_symbols = [rq_symbols]
-        df = rq.get_price(
-            rq_symbols,
-            start_date=start_date,
-            end_date=end_date,
-            frequency="1d",
-            adjust_type="none",
-            expect_df=True,
-        )
-        if df is None or df.empty:
-            return self._empty_stock_daily_bar()
-
-        df = df.reset_index()
-        df["symbol"] = rq.id_convert(df["order_book_id"].tolist(), to="normal")
-        df["date"] = df["date"].dt.strftime("%Y%m%d")
-        df = df.rename(
-            columns={"total_turnover": "turnover", "prev_close": "pre_close"}
-        )
-        if "pre_close" not in df.columns:
-            df["pre_close"] = float("nan")
-        df["change"] = (df["close"] - df["pre_close"]).round(4)
-        pct = (df["change"] / df["pre_close"]) * 100
-        df["pct_change"] = pct.replace(
-            [float("inf"), float("-inf")], float("nan")
-        ).round(4)
-        # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
-        if "volume" in df.columns:
-            df["volume"] = (df["volume"] / 100).astype("int64")
-        cols = [
-            "symbol",
-            "date",
-            "pre_close",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-            "change",
-            "pct_change",
-        ]
-        return df[cols].sort_values(["symbol", "date"]).reset_index(drop=True)

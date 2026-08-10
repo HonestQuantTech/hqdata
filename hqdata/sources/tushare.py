@@ -13,9 +13,11 @@ def _get_tushare():
     try:
         import tushare as ts
     except ImportError:
-        raise ImportError(
-            "tushare 未安装，hqdata不会默认安装您不一定需要的依赖。请运行：pip install hqdata[tushare]开启对tushare的支持。"
-        ) from None
+        raise ImportError("""tushare is not installed. 
+            
+            hqdata does not install dependencies you may not need by default. 
+            Please run: pip install hqdata[tushare] to enable tushare support.
+            """) from None
     return ts
 
 
@@ -222,6 +224,73 @@ class TushareSource(BaseSource):
         ]
         return df[cols]
 
+    def get_stock_daily_bar(
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        trading_days: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Get daily bar data for stocks.
+
+        Args:
+            symbol: see README, supports comma-separated multiple codes
+            start_date: see README
+            end_date: see README
+            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
+
+        Returns:
+            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
+        """
+        if trading_days is None:
+            return self._empty_stock_daily_bar()
+        if trading_days == 0:
+            return self._empty_stock_daily_bar()
+
+        symbols = [s.strip() for s in symbol.split(",")]
+
+        # daily API returns at most 6000 rows per call.
+        # chunk_size = floor(5900 / trading_days), at least 1
+        chunk_size = max(1, 5900 // trading_days)
+
+        chunks = [
+            symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
+        ]
+        dfs = []
+        for chunk in chunks:
+            self._rate_limiter.acquire()
+            d = self.pro.daily(
+                ts_code=",".join(chunk), start_date=start_date, end_date=end_date
+            )
+            if d is None or d.empty:
+                continue
+            if len(d) >= 6000:
+                print(
+                    f"[hqdata][tushare] daily returned {len(d)} rows which meets or exceeds "
+                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
+                )
+                return self._empty_stock_daily_bar()
+            dfs.append(d)
+        df = pd.concat(dfs, ignore_index=True) if dfs else None
+
+        if df is None or df.empty:
+            return self._empty_stock_daily_bar()
+        df = self._rename_columns(df).sort_values(["symbol", "date"])
+        cols = [
+            "symbol",
+            "date",
+            "pre_close",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "turnover",
+            "change",
+            "pct_change",
+        ]
+        return df[cols].reset_index(drop=True)
+
     def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
         """Get real-time stock snapshot with 5-level order book.
 
@@ -325,70 +394,3 @@ class TushareSource(BaseSource):
             "bv5",
         ]
         return df[cols].sort_values(["ets", "symbol"]).reset_index(drop=True)
-
-    def get_stock_daily_bar(
-        self,
-        symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        trading_days: Optional[int] = None,
-    ) -> pd.DataFrame:
-        """Get daily bar data for stocks.
-
-        Args:
-            symbol: see README, supports comma-separated multiple codes
-            start_date: see README
-            end_date: see README
-            trading_days: number of trading days in [start_date, end_date]; injected by api layer for batching
-
-        Returns:
-            DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
-        """
-        if trading_days is None:
-            return self._empty_stock_daily_bar()
-        if trading_days == 0:
-            return self._empty_stock_daily_bar()
-
-        symbols = [s.strip() for s in symbol.split(",")]
-
-        # daily API returns at most 6000 rows per call.
-        # chunk_size = floor(5900 / trading_days), at least 1
-        chunk_size = max(1, 5900 // trading_days)
-
-        chunks = [
-            symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
-        ]
-        dfs = []
-        for chunk in chunks:
-            self._rate_limiter.acquire()
-            d = self.pro.daily(
-                ts_code=",".join(chunk), start_date=start_date, end_date=end_date
-            )
-            if d is None or d.empty:
-                continue
-            if len(d) >= 6000:
-                print(
-                    f"[hqdata][tushare] daily returned {len(d)} rows which meets or exceeds "
-                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
-                )
-                return self._empty_stock_daily_bar()
-            dfs.append(d)
-        df = pd.concat(dfs, ignore_index=True) if dfs else None
-
-        if df is None or df.empty:
-            return self._empty_stock_daily_bar()
-        df = self._rename_columns(df).sort_values(["symbol", "date"])
-        cols = [
-            "symbol",
-            "date",
-            "pre_close",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "turnover",
-            "change",
-            "pct_change",
-        ]
-        return df[cols].reset_index(drop=True)
