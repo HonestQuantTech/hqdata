@@ -249,9 +249,11 @@ class TushareSource(BaseSource):
 
         symbols = [s.strip() for s in symbol.split(",")]
 
-        # daily API returns at most 6000 rows per call.
-        # chunk_size = floor(5900 / trading_days), at least 1
-        chunk_size = max(1, 5900 // trading_days)
+        # daily API enforces two per-call limits (the second is undocumented but
+        # verified empirically: 1000 codes succeed, 1001 raise 列表个数超过限制1000个):
+        #   - at most 6000 rows returned
+        #   - at most 1000 ts_code entries per request
+        chunk_size = max(1, min(5900 // trading_days, 1000))
 
         chunks = [
             symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
