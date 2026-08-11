@@ -1,4 +1,4 @@
-"""Ricequant (米筐) data source adapter"""
+"""Ricequant data source adapter"""
 
 import os
 from datetime import datetime, timedelta
@@ -274,7 +274,7 @@ class RicequantSource(BaseSource):
         df["pct_change"] = pct.replace(
             [float("inf"), float("-inf")], float("nan")
         ).round(4)
-        # rqdatac daily bar: volume unit is 股(shares), normalize to 手(lots)
+        # rqdatac daily bar reports volume in shares; normalize to lots (1 lot = 100 shares)
         if "volume" in df.columns:
             df["volume"] = (df["volume"] / 100).astype("int64")
         cols = [

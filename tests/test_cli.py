@@ -607,7 +607,7 @@ class TestCompareStockList:
         assert "No differences found" in result.output
 
     def test_ignores_name_diff_while_delisting_pending(self, runner, tmp_path):
-        """Sources rename stocks to the 退市整理期 name at different times."""
+        """Sources rename stocks to the delisting-period name at different times."""
         write_stock_list_csv(
             tmp_path,
             "tushare",

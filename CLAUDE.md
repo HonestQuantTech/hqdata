@@ -46,6 +46,9 @@ hqdata/config.py        # 在 import 时从项目根目录加载 .env
 ### 代码格式化
 项目使用 `black==25.1.0` 统一格式化风格。`.claude/settings.json` 中已配置 Claude Code hook，每次修改 Python 文件后自动运行 black。团队成员需确保本地已安装对应版本（`pip install black==25.1.0`）。
 
+### 注释语言
+代码中的注释和 docstring 一律使用全英文。领域术语若必须保留中文（如交易所报错原文），可在英文注释中以引用形式出现。测试数据里的中文值（股票名称等）不受此限制。
+
 ### 接口联动检查
 改上层接口（`api.py` / `__init__.py`）后，必须检查下层接口（`sources/*.py`）和测试文件是否需要联动改动，确保代码库各处一致。
 

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-import hqdata.config  # noqa: F401  加载 .env
+import hqdata.config  # noqa: F401  loads .env
 from hqdata.sources.tushare import TushareSource
 from tests.helpers import (
     DATE_PATTERN,

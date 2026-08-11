@@ -1,4 +1,4 @@
-"""hqdata - A股历史与实时行情数据统一接入、清洗与存储"""
+"""hqdata - unified access, cleaning and storage for A-share market data"""
 
 from hqdata.config import *  # Load .env on import
 from hqdata.api import (

@@ -59,11 +59,12 @@ _STOCK_DAILY_COLUMNS = [
 
 # field -> absolute tolerance (0.0 = exact). Thresholds derived from a full-corpus
 # survey of 139 days x ~5500 stocks of real stored data:
-# - turnover: tushare's 千元->元 conversion is only precise to the yuan while
-#   ricequant keeps cents, so noise runs up to 1 yuan — and the float form of a
-#   one-yuan gap can slightly exceed 1.0 (e.g. 8249685.0 - 8249683.999999999).
-#   The tolerance is set to 2.0: comfortably above the noise, still three orders
-#   of magnitude below the smallest real discrepancy observed (> 1000 yuan).
+# - turnover: tushare's thousands-of-yuan -> yuan conversion is only precise to
+#   the yuan while ricequant keeps cents, so noise runs up to 1 yuan — and the
+#   float form of a one-yuan gap can slightly exceed 1.0 (e.g. 8249685.0 -
+#   8249683.999999999). The tolerance is set to 2.0: comfortably above the
+#   noise, still three orders of magnitude below the smallest real discrepancy
+#   observed (> 1000 yuan).
 # - pct_change: the ricequant value is computed locally by hqdata and can differ
 #   from tushare's official figure by one final-digit rounding step (1e-4).
 #   The tolerance is set midway between one step and two steps (2e-4) because
@@ -350,9 +351,9 @@ def _compare_stock_list_frames(
 
     both = merged[merged["_merge"] == "both"]
     # Stocks approaching delisting (delist_date set and later than the snapshot
-    # date) are renamed to the 退市整理期 name ("XX退") at different times by the
-    # two sources (ricequant renames early, tushare keeps the *ST name), so name
-    # differences are only compared outside that window.
+    # date) are renamed to the delisting-period name ("XX退") at different times
+    # by the two sources (ricequant renames early, tushare keeps the *ST name),
+    # so name differences are only compared outside that window.
     pending_delist = (
         (both["delist_date_tushare"] != "")
         & (both["delist_date_tushare"] > both["date"])

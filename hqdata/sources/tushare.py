@@ -55,8 +55,8 @@ class TushareSource(BaseSource):
     Token can be set via environment variable TUSHARE_TOKEN.
     """
 
-    # Tushare API allows 200 calls per minute(2000积分以上)
-    # Tushare API allows 500 calls per minute(5000积分以上)
+    # Tushare rate limit by subscription tier: 200 calls/min (2000+ points),
+    # 500 calls/min (5000+ points).
     # Shared across all instances (class-level) so multiple TushareSource objects
     # respect the same global rate limit — intentional singleton-style design.
     _rate_limiter = _RateLimiter(max_calls=200, window_seconds=60.0)
@@ -92,8 +92,9 @@ class TushareSource(BaseSource):
                 "amount": "turnover",
             }
         )
-        # Tushare daily bar: volume unit is 手(lots), turnover unit is 千元
-        # Normalize turnover to 元; volume stays in 手 to match other sources
+        # Tushare daily bar reports volume in lots and turnover in thousands of
+        # yuan. Normalize turnover to yuan; volume stays in lots to match other
+        # sources.
         if "volume" in df.columns:
             df["volume"] = df["volume"].astype("int64")
         if "turnover" in df.columns:
@@ -252,7 +253,8 @@ class TushareSource(BaseSource):
         symbols = [s.strip() for s in symbol.split(",")]
 
         # daily API enforces two per-call limits (the second is undocumented but
-        # verified empirically: 1000 codes succeed, 1001 raise 列表个数超过限制1000个):
+        # verified empirically: 1000 codes succeed, 1001 raise
+        # "列表个数超过限制1000个"):
         #   - at most 6000 rows returned
         #   - at most 1000 ts_code entries per request
         chunk_size = max(1, min(5900 // trading_days, 1000))
@@ -363,7 +365,7 @@ class TushareSource(BaseSource):
         now = datetime.now()
         lts = now.strftime("%Y%m%dT%H%M%S") + f"{now.microsecond // 1000:03d}"
         df["lts"] = lts
-        # volume: 股 → 手
+        # volume: shares -> lots (1 lot = 100 shares)
         df["volume"] = (df["volume"] / 100).astype("int64")
         cols = [
             "ets",
