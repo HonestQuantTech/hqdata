@@ -36,6 +36,46 @@ _DIFF_COLUMNS = [
 
 _STOCK_COMPARE_FIELDS = ["exchange", "board", "curr_type", "list_date", "delist_date"]
 
+_STOCK_DAILY_COLUMNS = [
+    "symbol",
+    "date",
+    "pre_close",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "turnover",
+    "change",
+    "pct_change",
+]
+
+# field -> absolute tolerance (0.0 = exact). Thresholds derived from a full-corpus
+# survey of 139 days x ~5500 stocks of real stored data:
+# - turnover: tushare's 千元->元 conversion is only precise to the yuan while
+#   ricequant keeps cents, so noise runs up to 1 yuan — and the float form of a
+#   one-yuan gap can slightly exceed 1.0 (e.g. 8249685.0 - 8249683.999999999).
+#   The tolerance is set to 2.0: comfortably above the noise, still three orders
+#   of magnitude below the smallest real discrepancy observed (> 1000 yuan).
+# - pct_change: the ricequant value is computed locally by hqdata and can differ
+#   from tushare's official figure by one final-digit rounding step (1e-4).
+#   The tolerance is set midway between one step and two steps (2e-4) because
+#   the float representation of a one-step difference can slightly exceed 1e-4
+#   (e.g. 2.0001 - 2.0 == 0.00010000000000021103).
+# Everything else matched exactly across all 763k row pairs, so any difference
+# there is a real data discrepancy worth reporting.
+_STOCK_DAILY_FIELD_TOLERANCES = {
+    "pre_close": 0.0,
+    "open": 0.0,
+    "high": 0.0,
+    "low": 0.0,
+    "close": 0.0,
+    "volume": 0.0,
+    "turnover": 2.0,
+    "change": 0.0,
+    "pct_change": 0.00015,
+}
+
 
 # ---------------------------------------------------------------------------
 # generic helpers (shared by every `compare` subcommand)
@@ -334,6 +374,93 @@ def _compare_stock_list_frames(
 
 
 # ---------------------------------------------------------------------------
+# stock daily
+# ---------------------------------------------------------------------------
+
+
+def _load_stock_daily_csv(path: Path, source: str) -> pd.DataFrame:
+    df = _load_dated_csv(path, source, "stock_daily", _STOCK_DAILY_COLUMNS)
+
+    normalized = df.copy()
+    normalized["symbol"] = normalized["symbol"].map(_normalize_text)
+    normalized["date"] = normalized["date"].map(_normalize_basic_date)
+    for field in _STOCK_DAILY_FIELD_TOLERANCES:
+        normalized[field] = pd.to_numeric(normalized[field], errors="coerce")
+
+    _validate_date_matches_filename(normalized, path, source, "stock_daily")
+
+    return (
+        normalized.sort_values("symbol")
+        .drop_duplicates(subset=["symbol"], keep="last")
+        .reset_index(drop=True)
+    )
+
+
+def _load_stock_daily_dir(path: Path, source: str) -> dict[str, pd.DataFrame]:
+    return _load_dated_dir(path, source, "stock_daily", _load_stock_daily_csv)
+
+
+def _compare_stock_daily_frames(
+    tushare_df: pd.DataFrame, ricequant_df: pd.DataFrame
+) -> list[dict[str, object]]:
+    merged = tushare_df.merge(
+        ricequant_df,
+        on=["date", "symbol"],
+        how="outer",
+        suffixes=("_tushare", "_ricequant"),
+        indicator=True,
+    )
+
+    rows: list[dict[str, object]] = []
+
+    for row in merged[merged["_merge"] == "left_only"].itertuples():
+        rows.append(
+            _diff_row(
+                row.date, row.symbol, "symbol_only_tushare", tushare_value="present"
+            )
+        )
+
+    # rqdatac's get_price pads suspension days with placeholder rows
+    # (volume=0, OHLC=pre_close) while tushare's daily omits suspended stocks
+    # entirely — that's a representation difference, not a data difference.
+    only_ricequant = merged[
+        (merged["_merge"] == "right_only") & (merged["volume_ricequant"] > 0)
+    ]
+    for row in only_ricequant.itertuples():
+        rows.append(
+            _diff_row(
+                row.date, row.symbol, "symbol_only_ricequant", ricequant_value="present"
+            )
+        )
+
+    both = merged[merged["_merge"] == "both"]
+    for field, tolerance in _STOCK_DAILY_FIELD_TOLERANCES.items():
+        tushare_values = both[f"{field}_tushare"]
+        ricequant_values = both[f"{field}_ricequant"]
+        # ~(diff <= tol) rather than (diff > tol) so NaN on either side counts
+        # as a mismatch instead of being silently treated as equal.
+        mismatch = ~((tushare_values - ricequant_values).abs() <= tolerance)
+        for date, symbol, tushare_value, ricequant_value in zip(
+            both.loc[mismatch, "date"],
+            both.loc[mismatch, "symbol"],
+            tushare_values[mismatch],
+            ricequant_values[mismatch],
+        ):
+            rows.append(
+                _diff_row(
+                    date,
+                    symbol,
+                    "value_mismatch",
+                    field,
+                    tushare_value,
+                    ricequant_value,
+                )
+            )
+
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
 
@@ -391,4 +518,38 @@ def cmd_compare_stock_list(ctx: click.Context) -> None:
         "compare stock-list",
         diff,
         output_root / "compare" / "stock_list_diff.csv",
+    )
+
+
+@compare.command("stock-daily")
+@click.pass_context
+def cmd_compare_stock_daily(ctx: click.Context) -> None:
+    """Compare stored tushare/ricequant stock_daily CSV files."""
+
+    output_root = ctx.obj["output_root"]
+    tushare_files = _load_stock_daily_dir(
+        output_root / "tushare" / "stock_daily", "tushare"
+    )
+    ricequant_files = _load_stock_daily_dir(
+        output_root / "ricequant" / "stock_daily", "ricequant"
+    )
+    tushare_dates = set(tushare_files)
+    ricequant_dates = set(ricequant_files)
+
+    rows = _diff_file_presence(output_root, tushare_dates, ricequant_dates)
+    for date in sorted(tushare_dates & ricequant_dates):
+        rows.extend(
+            _compare_stock_daily_frames(tushare_files[date], ricequant_files[date])
+        )
+
+    diff = (
+        pd.DataFrame(rows, columns=_DIFF_COLUMNS)
+        .sort_values(["date", "symbol", "status", "field"])
+        .reset_index(drop=True)
+    )
+    _finish_compare(
+        ctx,
+        "compare stock-daily",
+        diff,
+        output_root / "compare" / "stock_daily_diff.csv",
     )

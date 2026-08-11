@@ -134,6 +134,22 @@ hqdata --output ~/.hqdata compare stock-list
   - 若某一侧存在非交易日（按该源 calendar.csv 判定）的文件，报 `file_not_trading_day_*` 差异
   - `delist_date` 晚于快照日（尚未生效的退市日）视同空值，不算差异——两家数据源填写时点不同
 
+股票日线也可以直接对比：
+
+```bash
+hqdata --output ~/.hqdata compare stock-daily
+```
+
+该命令会读取 `~/.hqdata/tushare/stock_daily/*.csv` 和 `~/.hqdata/ricequant/stock_daily/*.csv`。
+
+- 若无差异，命令返回成功
+- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/stock_daily_diff.csv`
+- 校验规则（`date` 列/非交易日文件的规则与 stock-list 相同），数值字段按以下容差对比：
+  - `turnover`：容差 2 元——tushare 的千元转元只精确到元，ricequant 保留角分，噪声最大 1 元（再留出浮点表示误差）
+  - `pct_change`：容差 0.00015——ricequant 侧由 hqdata 本地计算，与 tushare 官方值可差一个末位舍入（0.0001）
+  - 其余字段（pre_close/open/high/low/close/volume/change）精确对比——真实数据验证 76 万行完全一致，出现差异即为真实数据分歧
+  - ricequant 独有且 `volume=0` 的行视为停牌占位行，不算差异——rqdatac 为停牌日填充占位行（OHLC=昨收、成交量0），tushare 不返回停牌股，属于表示方式差异
+
 ## 测试
 
 ```bash

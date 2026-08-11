@@ -422,6 +422,21 @@ _STOCK_ROW = {
 
 _STOCK_COLUMNS = list(STOCK_LIST_DF.columns)
 
+_DAILY_ROW = {
+    "symbol": "000001.SZ",
+    "pre_close": 10.0,
+    "open": 10.1,
+    "high": 10.5,
+    "low": 9.9,
+    "close": 10.2,
+    "volume": 1000,
+    "turnover": 10200.0,
+    "change": 0.2,
+    "pct_change": 2.0,
+}
+
+_DAILY_COLUMNS = list(DAILY_BAR_DF.columns)
+
 
 def write_calendar_csv(output_root, source, calendar_df):
     path = output_root / source / "calendar.csv"
@@ -435,6 +450,14 @@ def write_stock_list_csv(output_root, source, date, rows=({},), filename=None):
     path = output_root / source / "stock_list" / (filename or f"{date}.csv")
     path.parent.mkdir(parents=True, exist_ok=True)
     frame[_STOCK_COLUMNS].to_csv(path, index=False)
+
+
+def write_stock_daily_csv(output_root, source, date, rows=({},), filename=None):
+    """Write a stock_daily CSV; each row spec is merged over a valid default row."""
+    frame = pd.DataFrame([{**_DAILY_ROW, "date": date, **spec} for spec in rows])
+    path = output_root / source / "stock_daily" / (filename or f"{date}.csv")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame[_DAILY_COLUMNS].to_csv(path, index=False)
 
 
 class TestCompareCalendar:
@@ -607,6 +630,128 @@ class TestCompareStockList:
 
         result = runner.invoke(
             cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert result.exit_code != 0
+        assert "not matching the file name" in result.output
+
+
+class TestCompareStockDaily:
+    def test_no_diff_within_tolerance(self, runner, tmp_path):
+        """turnover diffs <= 1.0 yuan and pct_change diffs <= 0.0001 must not report."""
+        write_stock_daily_csv(tmp_path, "tushare", "20260105")
+        write_stock_daily_csv(
+            tmp_path,
+            "ricequant",
+            "20260105",
+            rows=[{"turnover": 10200.5, "pct_change": 2.0001}],
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-daily"]
+        )
+
+        assert_success(result)
+        assert "No differences found" in result.output
+        assert not (tmp_path / "compare" / "stock_daily_diff.csv").exists()
+
+    def test_writes_diff_report(self, runner, tmp_path):
+        write_stock_daily_csv(
+            tmp_path,
+            "tushare",
+            "20260105",
+            rows=[
+                {},
+                {"symbol": "000002.SZ", "close": 20.0},
+            ],
+        )
+        write_stock_daily_csv(
+            tmp_path,
+            "ricequant",
+            "20260105",
+            rows=[{"close": 10.3, "turnover": 10203.0}],
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-daily"]
+        )
+
+        assert result.exit_code != 0
+        assert "Differences found" in result.output
+        report = pd.read_csv(tmp_path / "compare" / "stock_daily_diff.csv", dtype=str)
+        assert set(report["status"]) == {
+            "symbol_only_tushare",  # 000002.SZ
+            "value_mismatch",  # 000001.SZ close (exact) + turnover (> 1.0 yuan)
+        }
+        mismatches = report[report["status"] == "value_mismatch"]
+        assert set(mismatches["field"]) == {"close", "turnover"}
+
+    def test_ignores_suspension_padding_rows(self, runner, tmp_path):
+        """ricequant pads suspension days (volume=0, OHLC=pre_close); tushare omits them."""
+        write_stock_daily_csv(tmp_path, "tushare", "20260105")
+        write_stock_daily_csv(
+            tmp_path,
+            "ricequant",
+            "20260105",
+            rows=[
+                {},
+                {
+                    "symbol": "600058.SH",
+                    "pre_close": 11.52,
+                    "open": 11.52,
+                    "high": 11.52,
+                    "low": 11.52,
+                    "close": 11.52,
+                    "volume": 0,
+                    "turnover": 0.0,
+                    "change": 0.0,
+                    "pct_change": 0.0,
+                },
+            ],
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-daily"]
+        )
+
+        assert_success(result)
+        assert "No differences found" in result.output
+
+    def test_reports_ricequant_only_with_volume(self, runner, tmp_path):
+        """A ricequant-only row that actually traded is a real discrepancy."""
+        write_stock_daily_csv(tmp_path, "tushare", "20260105")
+        write_stock_daily_csv(
+            tmp_path,
+            "ricequant",
+            "20260105",
+            rows=[{}, {"symbol": "600058.SH"}],
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-daily"]
+        )
+
+        assert result.exit_code != 0
+        report = pd.read_csv(tmp_path / "compare" / "stock_daily_diff.csv", dtype=str)
+        assert list(report["status"]) == ["symbol_only_ricequant"]
+        assert list(report["symbol"]) == ["600058.SH"]
+
+    def test_missing_directory(self, runner, tmp_path):
+        write_stock_daily_csv(tmp_path, "tushare", "20260105")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-daily"]
+        )
+
+        assert result.exit_code != 0
+        assert "Missing stock_daily directory" in result.output
+
+    def test_rejects_date_filename_mismatch(self, runner, tmp_path):
+        write_stock_daily_csv(tmp_path, "tushare", "20260101", filename="20260102.csv")
+        write_stock_daily_csv(tmp_path, "ricequant", "20260102")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-daily"]
         )
 
         assert result.exit_code != 0
