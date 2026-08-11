@@ -209,11 +209,12 @@ class TushareSource(BaseSource):
         frames = [f for f in frames if f is not None and not f.empty]
         for frame in frames:
             if len(frame) >= 6000:
-                print(
-                    f"[hqdata][tushare] get_stock_list() returned {len(frame)} rows which meets or exceeds "
-                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
+                # Raise instead of returning empty: callers must be able to
+                # tell truncated data apart from a genuinely empty result.
+                raise RuntimeError(
+                    f"[hqdata][tushare] stock_basic returned {len(frame)} rows, "
+                    "meeting the 6000-row per-call API limit — data would be truncated"
                 )
-                return self._empty_stock_list()
         if not frames:
             return self._empty_stock_list()
         df = pd.concat(frames, ignore_index=True)
@@ -292,11 +293,12 @@ class TushareSource(BaseSource):
             if d is None or d.empty:
                 continue
             if len(d) >= 6000:
-                print(
-                    f"[hqdata][tushare] daily returned {len(d)} rows which meets or exceeds "
-                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
+                # Raise instead of returning empty: callers must be able to
+                # tell truncated data apart from a genuinely empty result.
+                raise RuntimeError(
+                    f"[hqdata][tushare] daily returned {len(d)} rows, "
+                    "meeting the 6000-row per-call API limit — data would be truncated"
                 )
-                return self._empty_stock_daily_bar()
             dfs.append(d)
         df = pd.concat(dfs, ignore_index=True) if dfs else None
 

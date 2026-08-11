@@ -98,6 +98,26 @@ class TestTushareSource:
             fields=source._STOCK_LIST_FIELDS,
         )
 
+    def test_get_stock_list_raises_on_row_limit(self):
+        """A frame at the 6000-row cap means truncation — raise, don't return empty."""
+        source = make_source_with_stock_basic(
+            pd.DataFrame(
+                {
+                    "ts_code": [f"{i:06d}.SZ" for i in range(6000)],
+                    "name": ["A"] * 6000,
+                    "market": ["主板"] * 6000,
+                    "exchange": ["SZSE"] * 6000,
+                    "curr_type": ["CNY"] * 6000,
+                    "list_date": ["20190101"] * 6000,
+                    "delist_date": [None] * 6000,
+                }
+            )
+        )
+
+        with patch.object(TushareSource._rate_limiter, "acquire", return_value=None):
+            with pytest.raises(RuntimeError, match="6000-row"):
+                source.get_stock_list(trade_date="20200102")
+
 
 class TestTushareIntegration(IntegrationTestMixin):
     """Integration tests using real Tushare API data."""
