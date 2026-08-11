@@ -2,7 +2,7 @@
 
 import os
 from datetime import date, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pandas as pd
 import pytest
@@ -58,8 +58,40 @@ class TestTushareSource:
 
         assert set(df["symbol"]) == {"000001.SZ", "000002.SZ"}
         assert (df["date"] == "20200102").all()
+        # Whole-market queries fetch one exchange per call to stay clear of the
+        # 6000-row per-call cap.
+        assert source.pro.stock_basic.call_args_list == [
+            call(
+                exchange=single_exchange,
+                market=None,
+                list_status="L,D",
+                fields=source._STOCK_LIST_FIELDS,
+            )
+            for single_exchange in ("SSE", "SZSE", "BSE")
+        ]
+
+    def test_get_stock_list_by_symbol_uses_single_call(self):
+        """A symbol query is bounded by the requested codes; no per-exchange split."""
+        source = make_source_with_stock_basic(
+            pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "name": ["A"],
+                    "market": ["主板"],
+                    "exchange": ["SZSE"],
+                    "curr_type": ["CNY"],
+                    "list_date": ["20190101"],
+                    "delist_date": [None],
+                }
+            )
+        )
+
+        with patch.object(TushareSource._rate_limiter, "acquire", return_value=None):
+            df = source.get_stock_list(trade_date="20200102", symbol="000001.SZ")
+
+        assert list(df["symbol"]) == ["000001.SZ"]
         source.pro.stock_basic.assert_called_once_with(
-            ts_code=None,
+            ts_code="000001.SZ",
             exchange=None,
             market=None,
             list_status="L,D",

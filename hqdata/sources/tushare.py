@@ -176,26 +176,47 @@ class TushareSource(BaseSource):
         if exchange:
             exchange = self._map_comma_separated(exchange, self._EXCHANGE_MAP)
 
-        # stock_basic API returns at most 6000 rows per call.
-        # Query listed + delisted names once, then reconstruct the requested universe
-        # from list_date / delist_date boundaries.
-        self._rate_limiter.acquire()
-        df = self.pro.stock_basic(
-            ts_code=symbol,
-            exchange=exchange,
-            market=board,
-            list_status="L,D",
-            fields=self._STOCK_LIST_FIELDS,
-        )
+        # stock_basic caps each call at 6000 rows, and a whole-market L,D query
+        # already returns ~5900 — one new-listing wave away from silent
+        # truncation. Fetch one exchange per call instead: the largest exchange
+        # (SZSE) is ~3100 rows, leaving ample headroom. A symbol query is
+        # bounded by the number of requested codes, so it stays a single call.
+        if symbol:
+            self._rate_limiter.acquire()
+            frames = [
+                self.pro.stock_basic(
+                    ts_code=symbol,
+                    exchange=exchange,
+                    market=board,
+                    list_status="L,D",
+                    fields=self._STOCK_LIST_FIELDS,
+                )
+            ]
+        else:
+            exchanges = exchange.split(",") if exchange else ["SSE", "SZSE", "BSE"]
+            frames = []
+            for single_exchange in exchanges:
+                self._rate_limiter.acquire()
+                frames.append(
+                    self.pro.stock_basic(
+                        exchange=single_exchange,
+                        market=board,
+                        list_status="L,D",
+                        fields=self._STOCK_LIST_FIELDS,
+                    )
+                )
 
-        if df is None or df.empty:
+        frames = [f for f in frames if f is not None and not f.empty]
+        for frame in frames:
+            if len(frame) >= 6000:
+                print(
+                    f"[hqdata][tushare] get_stock_list() returned {len(frame)} rows which meets or exceeds "
+                    "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
+                )
+                return self._empty_stock_list()
+        if not frames:
             return self._empty_stock_list()
-        if len(df) >= 6000:
-            print(
-                f"[hqdata][tushare] get_stock_list() returned {len(df)} rows which meets or exceeds "
-                "the 6000-row API limit — data may be truncated. Returning empty DataFrame."
-            )
-            return self._empty_stock_list()
+        df = pd.concat(frames, ignore_index=True)
 
         df = self._rename_columns(df)
         df = df.drop_duplicates(subset=["symbol"]).reset_index(drop=True)
