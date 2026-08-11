@@ -34,7 +34,14 @@ _DIFF_COLUMNS = [
     "ricequant_value",
 ]
 
-_STOCK_COMPARE_FIELDS = ["exchange", "board", "curr_type", "list_date", "delist_date"]
+_STOCK_COMPARE_FIELDS = [
+    "name",
+    "exchange",
+    "board",
+    "curr_type",
+    "list_date",
+    "delist_date",
+]
 
 _STOCK_DAILY_COLUMNS = [
     "symbol",
@@ -342,9 +349,23 @@ def _compare_stock_list_frames(
         )
 
     both = merged[merged["_merge"] == "both"]
+    # Stocks approaching delisting (delist_date set and later than the snapshot
+    # date) are renamed to the 退市整理期 name ("XX退") at different times by the
+    # two sources (ricequant renames early, tushare keeps the *ST name), so name
+    # differences are only compared outside that window.
+    pending_delist = (
+        (both["delist_date_tushare"] != "")
+        & (both["delist_date_tushare"] > both["date"])
+    ) | (
+        (both["delist_date_ricequant"] != "")
+        & (both["delist_date_ricequant"] > both["date"])
+    )
     for field in _STOCK_COMPARE_FIELDS:
         tushare_values = both[f"{field}_tushare"]
         ricequant_values = both[f"{field}_ricequant"]
+        if field == "name":
+            tushare_values = tushare_values.mask(pending_delist, "")
+            ricequant_values = ricequant_values.mask(pending_delist, "")
         if field == "delist_date":
             # A delist date later than the snapshot date has not taken effect yet;
             # sources fill it at different times, so treat it as empty.

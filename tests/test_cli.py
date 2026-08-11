@@ -508,7 +508,7 @@ class TestCompareStockList:
             rows=[
                 {
                     "symbol": "920000.BJ",
-                    "name": "样本退",
+                    "name": "样本股",
                     "exchange": "BSE",
                     "board": "BSE",
                 }
@@ -521,7 +521,7 @@ class TestCompareStockList:
             rows=[
                 {
                     "symbol": "920000.BJ",
-                    "name": "*ST样本",
+                    "name": "样本股",
                     "exchange": "BJSE",
                     "board": "BSE",
                     "curr_type": "cny",
@@ -605,6 +605,46 @@ class TestCompareStockList:
 
         assert_success(result)
         assert "No differences found" in result.output
+
+    def test_ignores_name_diff_while_delisting_pending(self, runner, tmp_path):
+        """Sources rename stocks to the 退市整理期 name at different times."""
+        write_stock_list_csv(
+            tmp_path,
+            "tushare",
+            "20260105",
+            rows=[{"name": "*ST立方", "delist_date": "20260422"}],
+        )
+        write_stock_list_csv(
+            tmp_path,
+            "ricequant",
+            "20260105",
+            rows=[{"name": "立方退", "delist_date": "20260422"}],
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert_success(result)
+        assert "No differences found" in result.output
+
+    def test_reports_name_diff_without_pending_delisting(self, runner, tmp_path):
+        """A name difference on a normally-listed stock is a real discrepancy."""
+        write_stock_list_csv(
+            tmp_path, "tushare", "20260105", rows=[{"name": "平安银行"}]
+        )
+        write_stock_list_csv(
+            tmp_path, "ricequant", "20260105", rows=[{"name": "平安錕行"}]
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-list"]
+        )
+
+        assert result.exit_code != 0
+        report = pd.read_csv(tmp_path / "compare" / "stock_list_diff.csv", dtype=str)
+        assert list(report["status"]) == ["value_mismatch"]
+        assert list(report["field"]) == ["name"]
 
     def test_detects_non_trading_day_file(self, runner, tmp_path):
         calendar = make_calendar("20260102", closed=("20260101",))

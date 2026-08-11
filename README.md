@@ -133,6 +133,7 @@ hqdata --output ~/.hqdata compare stock-list
   - 文件内 `date` 列必须与文件名一致，否则直接报错
   - 若某一侧存在非交易日（按该源 calendar.csv 判定）的文件，报 `file_not_trading_day_*` 差异
   - `delist_date` 晚于快照日（尚未生效的退市日）视同空值，不算差异——两家数据源填写时点不同
+  - 临近退市（`delist_date` 非空且晚于快照日）的股票不比较 `name`——退市整理期改名（"XX退"）两家时点不同（ricequant 提前改，tushare 保留 *ST 名直到退市）；其余股票 `name` 精确对比
 
 股票日线也可以直接对比：
 
