@@ -320,6 +320,54 @@ class TushareSource(BaseSource):
         ]
         return df[cols].reset_index(drop=True)
 
+    def get_stock_factor(
+        self,
+        trade_date: str,
+        symbol: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get cumulative price adjustment factors for stocks.
+
+        Note:
+            factor is a cumulative back-adjustment (后复权) multiplier: raw_close * factor
+            reconstructs the source's back-adjusted price series. It is not comparable
+            across sources by raw value (each anchors its cumulative factor to a different
+            base point); only day-over-day ratios (factor[t] / factor[t-1]) are comparable.
+
+        Args:
+            trade_date: snapshot date (YYYYMMDD); injected by api layer
+            symbol: see README, supports comma-separated multiple codes; defaults to
+                every stock in that day's stock list
+
+        Returns:
+            DataFrame with columns: symbol, date, factor
+        """
+        if not symbol:
+            return self._empty_stock_factor()
+
+        symbols = [s.strip() for s in symbol.split(",")]
+
+        # adj_factor enforces the same undocumented 1000 ts_code per-call limit as
+        # daily() ("列表个数超过限制1000个"); a single trade_date yields one row per
+        # ts_code, so the 6000-row cap never binds here.
+        chunk_size = 1000
+        chunks = [
+            symbols[i : i + chunk_size] for i in range(0, len(symbols), chunk_size)
+        ]
+        dfs = []
+        for chunk in chunks:
+            self._rate_limiter.acquire()
+            d = self.pro.adj_factor(ts_code=",".join(chunk), trade_date=trade_date)
+            if d is None or d.empty:
+                continue
+            dfs.append(d)
+        df = pd.concat(dfs, ignore_index=True) if dfs else None
+
+        if df is None or df.empty:
+            return self._empty_stock_factor()
+        df = self._rename_columns(df).rename(columns={"adj_factor": "factor"})
+        cols = ["symbol", "date", "factor"]
+        return df[cols].sort_values("symbol").reset_index(drop=True)
+
     def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
         """Get real-time stock snapshot with 5-level order book.
 

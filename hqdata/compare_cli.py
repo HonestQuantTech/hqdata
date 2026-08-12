@@ -57,6 +57,23 @@ _STOCK_DAILY_COLUMNS = [
     "pct_change",
 ]
 
+_STOCK_FACTOR_COLUMNS = ["symbol", "date", "factor"]
+
+# factor is a cumulative back-adjustment multiplier anchored to a source-specific
+# base point, so raw values are never comparable across sources — only
+# day-over-day ratios (factor[t] / factor[t-1]) are, since a ratio of 1.0 means
+# "no corporate action that day" and a ratio > 1.0 means "this day's ex-rights
+# event scaled the back-adjusted price by this much" regardless of anchor.
+# Tolerance derived from a real-data survey (23 trading days x ~5500 stocks,
+# ~120k day-over-day pairs): 99.9% of pairs match to float noise (< 2e-6).
+# The 17 pairs that differ more are all real ex-rights days where tushare and
+# ricequant round the ex-rights price differently before deriving the ratio —
+# worst observed gap 6.03e-4 (002107.SZ, a cash-dividend-only event). Set to
+# 0.001: comfortably above that known rounding-convention gap, while still
+# catching a materially wrong ratio (a missed or double-counted corporate
+# action moves the ratio by several percent or more).
+_STOCK_FACTOR_RATIO_TOLERANCE = 0.001
+
 # field -> absolute tolerance (0.0 = exact). Thresholds derived from a full-corpus
 # survey of 139 days x ~5500 stocks of real stored data:
 # - turnover: tushare's thousands-of-yuan -> yuan conversion is only precise to
@@ -396,6 +413,101 @@ def _compare_stock_list_frames(
 
 
 # ---------------------------------------------------------------------------
+# stock factor
+# ---------------------------------------------------------------------------
+
+
+def _load_stock_factor_csv(path: Path, source: str) -> pd.DataFrame:
+    df = _load_dated_csv(path, source, "stock_factor", _STOCK_FACTOR_COLUMNS)
+
+    normalized = df.copy()
+    normalized["symbol"] = normalized["symbol"].map(_normalize_text)
+    normalized["date"] = normalized["date"].map(_normalize_basic_date)
+    normalized["factor"] = pd.to_numeric(normalized["factor"], errors="coerce")
+
+    _validate_date_matches_filename(normalized, path, source, "stock_factor")
+
+    return (
+        normalized.sort_values("symbol")
+        .drop_duplicates(subset=["symbol"], keep="last")
+        .reset_index(drop=True)
+    )
+
+
+def _load_stock_factor_dir(path: Path, source: str) -> dict[str, pd.DataFrame]:
+    return _load_dated_dir(path, source, "stock_factor", _load_stock_factor_csv)
+
+
+def _compute_factor_ratio(files: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Day-over-day factor ratio per symbol, across every loaded date.
+
+    factor's absolute value isn't comparable across sources (see
+    _STOCK_FACTOR_RATIO_TOLERANCE), so comparison happens on this ratio instead.
+    The ratio is computed against each symbol's previous *available* row, not
+    literally date-1 — a symbol missing from one day's file (e.g. not yet
+    listed) just gets skipped over, matching how the two sources' file sets
+    are expected to align in practice.
+    """
+    if not files:
+        return pd.DataFrame(columns=["symbol", "date", "ratio"])
+    all_df = pd.concat(files.values(), ignore_index=True).sort_values(
+        ["symbol", "date"]
+    )
+    all_df["ratio"] = all_df["factor"] / all_df.groupby("symbol")["factor"].shift(1)
+    return all_df[["symbol", "date", "ratio"]].reset_index(drop=True)
+
+
+def _compare_stock_factor_frames(
+    tushare_files: dict[str, pd.DataFrame], ricequant_files: dict[str, pd.DataFrame]
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+
+    common_dates = sorted(set(tushare_files) & set(ricequant_files))
+    for date in common_dates:
+        tushare_symbols = set(tushare_files[date]["symbol"])
+        ricequant_symbols = set(ricequant_files[date]["symbol"])
+        for symbol in sorted(tushare_symbols - ricequant_symbols):
+            rows.append(
+                _diff_row(date, symbol, "symbol_only_tushare", tushare_value="present")
+            )
+        for symbol in sorted(ricequant_symbols - tushare_symbols):
+            rows.append(
+                _diff_row(
+                    date, symbol, "symbol_only_ricequant", ricequant_value="present"
+                )
+            )
+
+    tushare_ratio = _compute_factor_ratio(tushare_files)
+    ricequant_ratio = _compute_factor_ratio(ricequant_files)
+    merged = tushare_ratio.merge(
+        ricequant_ratio,
+        on=["date", "symbol"],
+        how="inner",
+        suffixes=("_tushare", "_ricequant"),
+    )
+    # A NaN ratio just means "no prior data point in the loaded window" (e.g.
+    # the very first date on disk) on one or both sides — not a discrepancy.
+    comparable = merged.dropna(subset=["ratio_tushare", "ratio_ricequant"])
+    mismatch = ~(
+        (comparable["ratio_tushare"] - comparable["ratio_ricequant"]).abs()
+        <= _STOCK_FACTOR_RATIO_TOLERANCE
+    )
+    for date, symbol, tushare_value, ricequant_value in zip(
+        comparable.loc[mismatch, "date"],
+        comparable.loc[mismatch, "symbol"],
+        comparable.loc[mismatch, "ratio_tushare"],
+        comparable.loc[mismatch, "ratio_ricequant"],
+    ):
+        rows.append(
+            _diff_row(
+                date, symbol, "value_mismatch", "ratio", tushare_value, ricequant_value
+            )
+        )
+
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # stock daily
 # ---------------------------------------------------------------------------
 
@@ -574,4 +686,43 @@ def cmd_compare_stock_daily(ctx: click.Context) -> None:
         "compare stock-daily",
         diff,
         output_root / "compare" / "stock_daily_diff.csv",
+    )
+
+
+@compare.command("stock-factor")
+@click.pass_context
+def cmd_compare_stock_factor(ctx: click.Context) -> None:
+    """Compare stored tushare/ricequant stock_factor CSV files.
+
+    \b
+    factor's raw value isn't comparable across sources (each anchors its
+    cumulative factor to a different base point), so this compares
+    day-over-day ratios (factor[t] / factor[t-1]) instead — that ratio is
+    1.0 on a normal day and reflects the ex-rights scale on a corporate-action
+    day, regardless of anchor.
+    """
+
+    output_root = ctx.obj["output_root"]
+    tushare_files = _load_stock_factor_dir(
+        output_root / "tushare" / "stock_factor", "tushare"
+    )
+    ricequant_files = _load_stock_factor_dir(
+        output_root / "ricequant" / "stock_factor", "ricequant"
+    )
+    tushare_dates = set(tushare_files)
+    ricequant_dates = set(ricequant_files)
+
+    rows = _diff_file_presence(output_root, tushare_dates, ricequant_dates)
+    rows.extend(_compare_stock_factor_frames(tushare_files, ricequant_files))
+
+    diff = (
+        pd.DataFrame(rows, columns=_DIFF_COLUMNS)
+        .sort_values(["date", "symbol", "status", "field"])
+        .reset_index(drop=True)
+    )
+    _finish_compare(
+        ctx,
+        "compare stock-factor",
+        diff,
+        output_root / "compare" / "stock_factor_diff.csv",
     )

@@ -36,6 +36,10 @@ class BaseSource(ABC):
         )
 
     @staticmethod
+    def _empty_stock_factor() -> pd.DataFrame:
+        return pd.DataFrame(columns=["symbol", "date", "factor"])
+
+    @staticmethod
     def _empty_stock_daily_bar() -> pd.DataFrame:
         return pd.DataFrame(
             columns=[
@@ -149,6 +153,30 @@ class BaseSource(ABC):
 
         Returns:
             DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
+        """
+        pass
+
+    @abstractmethod
+    def get_stock_factor(
+        self,
+        trade_date: str,
+        symbol: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get cumulative price adjustment factors for stocks.
+
+        Note:
+            factor is a cumulative back-adjustment (后复权) multiplier: raw_close * factor
+            reconstructs the source's back-adjusted price series. It is not comparable
+            across sources by raw value (each anchors its cumulative factor to a different
+            base point); only day-over-day ratios (factor[t] / factor[t-1]) are comparable.
+
+        Args:
+            trade_date: snapshot date (YYYYMMDD); injected by api layer
+            symbol: see README, supports comma-separated multiple codes; defaults to
+                every stock in that day's stock list
+
+        Returns:
+            DataFrame with columns: symbol, date, factor
         """
         pass
 

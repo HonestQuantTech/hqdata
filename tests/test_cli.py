@@ -44,6 +44,14 @@ DAILY_BAR_DF = pd.DataFrame(
     }
 )
 
+STOCK_FACTOR_DF = pd.DataFrame(
+    {
+        "symbol": ["600000.SH"],
+        "date": ["20260102"],
+        "factor": [1.0],
+    }
+)
+
 
 def _stock_list_stub(trade_date):
     """Mimic real sources: stamp the requested trade_date into the date column."""
@@ -74,17 +82,20 @@ def api():
         patch("hqdata.cli.hqdata.get_calendar") as calendar,
         patch("hqdata.cli.hqdata.get_stock_list") as stock_list,
         patch("hqdata.cli.hqdata.get_stock_daily_bar") as stock_daily_bar,
+        patch("hqdata.cli.hqdata.get_stock_factor") as stock_factor,
     ):
         current_trading_day.return_value = "20260102"
         calendar.return_value = make_calendar("20260102")
         stock_list.side_effect = _stock_list_stub
         stock_daily_bar.return_value = DAILY_BAR_DF
+        stock_factor.return_value = STOCK_FACTOR_DF
         yield SimpleNamespace(
             init_source=init_source,
             current_trading_day=current_trading_day,
             calendar=calendar,
             stock_list=stock_list,
             stock_daily_bar=stock_daily_bar,
+            stock_factor=stock_factor,
         )
 
 
@@ -390,6 +401,143 @@ class TestFetchStockDaily:
 
 
 # ---------------------------------------------------------------------------
+# stock-factor
+# ---------------------------------------------------------------------------
+
+
+class TestFetchStockFactor:
+    def test_writes_csv_per_date(self, runner, api, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-factor",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        out_file = tmp_path / "tushare" / "stock_factor" / "20260102.csv"
+        assert out_file.exists()
+        df = pd.read_csv(out_file)
+        assert df["symbol"].iloc[0] == "600000.SH"
+
+    def test_uses_trade_date_stock_pool_per_day(self, runner, api, tmp_path):
+        """Each trading day's factors are fetched for that day's stock universe."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        api.stock_list.side_effect = [
+            pd.DataFrame({"symbol": ["600000.SH"], "date": ["20260102"]}),
+            pd.DataFrame({"symbol": ["000001.SZ"], "date": ["20260103"]}),
+        ]
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-factor",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert api.stock_list.call_args_list == [
+            call(trade_date="20260102"),
+            call(trade_date="20260103"),
+        ]
+        assert api.stock_factor.call_args_list == [
+            call("600000.SH", trade_date="20260102"),
+            call("000001.SZ", trade_date="20260103"),
+        ]
+
+    def test_no_data_no_file(self, runner, api, tmp_path):
+        api.stock_factor.return_value = STOCK_FACTOR_DF.iloc[0:0]
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-factor",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert "No data fetched" in result.output
+        out_dir = tmp_path / "tushare" / "stock_factor"
+        assert not out_dir.exists() or not any(out_dir.iterdir())
+
+    def test_batch_error_reported_and_nothing_written(self, runner, api, tmp_path):
+        api.stock_factor.side_effect = RuntimeError("API error")
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-factor",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)  # the CLI reports the error but does not crash
+        assert "ERROR" in result.output
+        out_dir = tmp_path / "tushare" / "stock_factor"
+        assert not out_dir.exists() or not any(out_dir.glob("*.csv"))
+
+    def test_error_on_later_day_preserves_earlier_writes(self, runner, api, tmp_path):
+        """A day already written to disk must survive an error on a later day."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        api.stock_factor.side_effect = [STOCK_FACTOR_DF, RuntimeError("API error")]
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-factor",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert "ERROR" in result.output
+        assert (tmp_path / "tushare" / "stock_factor" / "20260102.csv").exists()
+        assert not (tmp_path / "tushare" / "stock_factor" / "20260103.csv").exists()
+
+    def test_existing_file_is_skipped(self, runner, api, tmp_path):
+        """A day already on disk is not re-fetched on re-run."""
+        api.calendar.return_value = make_calendar("20260102", "20260103")
+        out_dir = tmp_path / "tushare" / "stock_factor"
+        out_dir.mkdir(parents=True)
+        (out_dir / "20260102.csv").write_text("placeholder")
+
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "stock-factor",
+                "--start",
+                "20260101",
+                "--end",
+                "20260103",
+            ],
+        )
+        assert_success(result)
+        assert api.stock_list.call_args_list == [call(trade_date="20260103")]
+        assert (out_dir / "20260102.csv").read_text() == "placeholder"
+
+
+# ---------------------------------------------------------------------------
 # multi-source
 # ---------------------------------------------------------------------------
 
@@ -458,6 +606,22 @@ def write_stock_daily_csv(output_root, source, date, rows=({},), filename=None):
     path = output_root / source / "stock_daily" / (filename or f"{date}.csv")
     path.parent.mkdir(parents=True, exist_ok=True)
     frame[_DAILY_COLUMNS].to_csv(path, index=False)
+
+
+_FACTOR_ROW = {
+    "symbol": "000001.SZ",
+    "factor": 1.0,
+}
+
+_FACTOR_COLUMNS = list(STOCK_FACTOR_DF.columns)
+
+
+def write_stock_factor_csv(output_root, source, date, rows=({},), filename=None):
+    """Write a stock_factor CSV; each row spec is merged over a valid default row."""
+    frame = pd.DataFrame([{**_FACTOR_ROW, "date": date, **spec} for spec in rows])
+    path = output_root / source / "stock_factor" / (filename or f"{date}.csv")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame[_FACTOR_COLUMNS].to_csv(path, index=False)
 
 
 class TestCompareCalendar:
@@ -792,6 +956,114 @@ class TestCompareStockDaily:
 
         result = runner.invoke(
             cli, ["--output", str(tmp_path), "compare", "stock-daily"]
+        )
+
+        assert result.exit_code != 0
+        assert "not matching the file name" in result.output
+
+
+class TestCompareStockFactor:
+    def test_no_diff_first_day_has_no_prior_ratio(self, runner, tmp_path):
+        """A single day has no prior factor to ratio against — not a mismatch."""
+        write_stock_factor_csv(
+            tmp_path, "tushare", "20260105", rows=[{"factor": 108.031}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "ricequant", "20260105", rows=[{"factor": 45.6}]
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-factor"]
+        )
+
+        assert_success(result)
+        assert "No differences found" in result.output
+        assert not (tmp_path / "compare" / "stock_factor_diff.csv").exists()
+
+    def test_no_diff_within_tolerance(self, runner, tmp_path):
+        """Matching day-over-day ratios must not report, even with different anchors."""
+        write_stock_factor_csv(
+            tmp_path, "tushare", "20260104", rows=[{"factor": 100.0}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "tushare", "20260105", rows=[{"factor": 121.7847}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "ricequant", "20260104", rows=[{"factor": 45.6}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "ricequant", "20260105", rows=[{"factor": 55.5399}]
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-factor"]
+        )
+
+        assert_success(result)
+        assert "No differences found" in result.output
+        assert not (tmp_path / "compare" / "stock_factor_diff.csv").exists()
+
+    def test_writes_diff_report_on_ratio_mismatch(self, runner, tmp_path):
+        """A day-over-day ratio disagreement is a real corporate-action discrepancy."""
+        write_stock_factor_csv(
+            tmp_path, "tushare", "20260104", rows=[{"factor": 100.0}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "tushare", "20260105", rows=[{"factor": 121.7847}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "ricequant", "20260104", rows=[{"factor": 45.6}]
+        )
+        # ricequant's ratio (1.05) disagrees with tushare's ratio (1.217847)
+        write_stock_factor_csv(
+            tmp_path, "ricequant", "20260105", rows=[{"factor": 47.88}]
+        )
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-factor"]
+        )
+
+        assert result.exit_code != 0
+        assert "Differences found" in result.output
+        report = pd.read_csv(tmp_path / "compare" / "stock_factor_diff.csv", dtype=str)
+        assert list(report["status"]) == ["value_mismatch"]
+        assert list(report["field"]) == ["ratio"]
+        assert list(report["date"]) == ["20260105"]
+
+    def test_reports_symbol_only_on_one_side(self, runner, tmp_path):
+        write_stock_factor_csv(
+            tmp_path,
+            "tushare",
+            "20260105",
+            rows=[{}, {"symbol": "600000.SH", "factor": 16.0}],
+        )
+        write_stock_factor_csv(tmp_path, "ricequant", "20260105")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-factor"]
+        )
+
+        assert result.exit_code != 0
+        report = pd.read_csv(tmp_path / "compare" / "stock_factor_diff.csv", dtype=str)
+        assert list(report["status"]) == ["symbol_only_tushare"]
+        assert list(report["symbol"]) == ["600000.SH"]
+
+    def test_missing_directory(self, runner, tmp_path):
+        write_stock_factor_csv(tmp_path, "tushare", "20260105")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-factor"]
+        )
+
+        assert result.exit_code != 0
+        assert "Missing stock_factor directory" in result.output
+
+    def test_rejects_date_filename_mismatch(self, runner, tmp_path):
+        write_stock_factor_csv(tmp_path, "tushare", "20260101", filename="20260102.csv")
+        write_stock_factor_csv(tmp_path, "ricequant", "20260102")
+
+        result = runner.invoke(
+            cli, ["--output", str(tmp_path), "compare", "stock-factor"]
         )
 
         assert result.exit_code != 0

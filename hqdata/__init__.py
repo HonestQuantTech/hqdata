@@ -11,6 +11,7 @@ from hqdata.api import (
     get_stock_list,
     get_stock_snapshot,
     get_stock_daily_bar,
+    get_stock_factor,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "get_stock_list",
     "get_stock_snapshot",
     "get_stock_daily_bar",
+    "get_stock_factor",
 ]

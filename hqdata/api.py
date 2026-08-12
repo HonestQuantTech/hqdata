@@ -174,6 +174,35 @@ def get_stock_daily_bar(
     return _source.get_stock_daily_bar(symbol, start_date, end_date, trading_days)
 
 
+def get_stock_factor(
+    symbol: Optional[str] = None,
+    trade_date: Optional[str] = None,
+) -> pd.DataFrame:
+    """Get cumulative price adjustment factors for stocks.
+
+    Note:
+        factor is a cumulative back-adjustment (后复权) multiplier: raw_close * factor
+        reconstructs the source's back-adjusted price series. It is not comparable
+        across sources by raw value (each anchors its cumulative factor to a different
+        base point); only day-over-day ratios (factor[t] / factor[t-1]) are comparable.
+
+    Args:
+        symbol: see README, supports comma-separated multiple codes; defaults to
+            every stock in that day's stock list
+        trade_date: snapshot date (YYYYMMDD); defaults to current trading day.
+
+    Returns:
+        DataFrame with columns: symbol, date, factor
+    """
+    if _source is None:
+        raise RuntimeError("Data source not initialized. Call init_source() first.")
+    if trade_date is None:
+        trade_date = get_current_trading_day()
+    if symbol is None:
+        symbol = ",".join(get_stock_list(trade_date=trade_date)["symbol"].tolist())
+    return _source.get_stock_factor(trade_date=trade_date, symbol=symbol)
+
+
 def get_stock_snapshot(symbol: str) -> pd.DataFrame:
     """Get real-time stock snapshot with 5-level order book.
 

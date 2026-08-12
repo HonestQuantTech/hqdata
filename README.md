@@ -23,6 +23,7 @@
 | 股票列表     | `get_stock_list`       |    ✓    |     ✓     | 获取指定交易日当天的上市股票列表 |
 | 股票实时快照 | `get_stock_snapshot`   |    ✓    |     ✓     | 含5档盘口                        |
 | 股票日线     | `get_stock_daily_bar`  |    ✓    |     ✓     |                                  |
+| 复权因子     | `get_stock_factor`     |    ✓    |     ✓     | 累积后复权乘数，见下方说明       |
 
 另有更多功能，可以前往api.py查看所有功能。
 
@@ -151,6 +152,26 @@ hqdata --output ~/.hqdata compare stock-daily
   - 其余字段（pre_close/open/high/low/close/volume/change）精确对比——真实数据验证 76 万行完全一致，出现差异即为真实数据分歧
   - ricequant 独有且 `volume=0` 的行视为停牌占位行，不算差异——rqdatac 为停牌日填充占位行（OHLC=昨收、成交量0），tushare 不返回停牌股，属于表示方式差异
 
+复权因子也可以直接落盘：
+
+```bash
+hqdata stock-factor --start 20260101 --end 20260401
+```
+
+只拉取当天 stock-list 中股票的复权因子（一天一个 CSV，落盘在 `stock_factor/` 目录下），用法和 `stock-daily` 一致。
+
+也可以直接对比：
+
+```bash
+hqdata --output ~/.hqdata compare stock-factor
+```
+
+该命令会读取 `~/.hqdata/tushare/stock_factor/*.csv` 和 `~/.hqdata/ricequant/stock_factor/*.csv`。
+
+- 若无差异，命令返回成功
+- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/stock_factor_diff.csv`
+- 校验规则：`factor` 原始值不可跨源比较（两家的累积基准点不同），因此比较的是跨日比值 `factor[t] / factor[t-1]`（正常日应为1.0，除权日应等于除权比例，与基准点无关）；容差 0.001——真实数据验证（23 个交易日 × ~5500 只股票，约 12 万个跨日比值对）显示 99.9% 完全一致（浮点噪声 < 2e-6），仅有的 17 处差异都是真实除权日两家对除权价舍入方式不同导致（最大相对误差 6e-4，多为纯现金分红事件）
+
 ## 测试
 
 ```bash
@@ -214,3 +235,12 @@ symbol 参数统一使用 `交易所简写代码` 作为后缀，支持以 `,` �
 #### turnover（成交额）
 
 单位：元（yuan）
+
+#### factor（复权因子）
+
+累积后复权（后复权，hfq）乘数：`raw_close * factor` 还原出该数据源的后复权价格序列。
+
+- tushare：直接取 `adj_factor` 接口返回值
+- ricequant：取 `get_price(adjust_type='post').close / get_price(adjust_type='none').close`，数值上与 `get_ex_factor` 返回的 `ex_cum_factor` 等价（已用真实数据验证），但按天返回，不需要额外按 `ex_end_date` 区间匹配
+
+**注意：`factor` 的绝对值不可跨数据源比较**——两家的累积基准点不同（tushare 从更早的历史起点累积，ricequant 从各自的起点累积），只有同一数据源内的跨日比值 `factor[t] / factor[t-1]` 才有跨源可比性（该比值在正常交易日应为 1.0，在除权除息日应等于当次除权比例）。

@@ -292,6 +292,69 @@ class RicequantSource(BaseSource):
         ]
         return df[cols].sort_values(["symbol", "date"]).reset_index(drop=True)
 
+    def get_stock_factor(
+        self,
+        trade_date: str,
+        symbol: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Get cumulative price adjustment factors for stocks.
+
+        Note:
+            factor is a cumulative back-adjustment (后复权) multiplier: raw_close * factor
+            reconstructs the source's back-adjusted price series. It is not comparable
+            across sources by raw value (each anchors its cumulative factor to a different
+            base point); only day-over-day ratios (factor[t] / factor[t-1]) are comparable.
+
+            rqdatac has no direct per-day cumulative-factor API: get_ex_factor returns a
+            sparse per-corporate-action event table (ex_cum_factor), not a daily series.
+            factor is instead derived as post-adjusted close / unadjusted close for
+            trade_date, which is numerically equivalent to ex_cum_factor (verified
+            against real data) and comes back already shaped as one row per symbol.
+
+        Args:
+            trade_date: snapshot date (YYYYMMDD); injected by api layer
+            symbol: see README, supports comma-separated multiple codes; defaults to
+                every stock in that day's stock list
+
+        Returns:
+            DataFrame with columns: symbol, date, factor
+        """
+        if not symbol:
+            return self._empty_stock_factor()
+
+        rq = _get_rqdatac()
+        rq_symbols = rq.id_convert([s.strip() for s in symbol.split(",")])
+        if isinstance(rq_symbols, str):
+            rq_symbols = [rq_symbols]
+
+        none_df = rq.get_price(
+            rq_symbols,
+            start_date=trade_date,
+            end_date=trade_date,
+            frequency="1d",
+            adjust_type="none",
+            fields=["close"],
+            expect_df=True,
+        )
+        post_df = rq.get_price(
+            rq_symbols,
+            start_date=trade_date,
+            end_date=trade_date,
+            frequency="1d",
+            adjust_type="post",
+            fields=["close"],
+            expect_df=True,
+        )
+        if none_df is None or none_df.empty or post_df is None or post_df.empty:
+            return self._empty_stock_factor()
+
+        factor = (post_df["close"] / none_df["close"]).reset_index()
+        factor.columns = ["order_book_id", "date", "factor"]
+        factor["symbol"] = rq.id_convert(factor["order_book_id"].tolist(), to="normal")
+        factor["date"] = factor["date"].dt.strftime("%Y%m%d")
+        cols = ["symbol", "date", "factor"]
+        return factor[cols].sort_values("symbol").reset_index(drop=True)
+
     def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
         """Get real-time stock snapshot with 5-level order book.
 

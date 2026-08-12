@@ -10,6 +10,7 @@ from hqdata.sources.base import BaseSource
 CALENDAR_COLUMNS = set(BaseSource._empty_calendar().columns)
 STOCK_LIST_COLUMNS = set(BaseSource._empty_stock_list().columns)
 STOCK_DAILY_BAR_COLUMNS = set(BaseSource._empty_stock_daily_bar().columns)
+STOCK_FACTOR_COLUMNS = set(BaseSource._empty_stock_factor().columns)
 STOCK_SNAPSHOT_COLUMNS = set(BaseSource._empty_stock_snapshot().columns)
 
 DATE_PATTERN = r"^\d{8}$"
@@ -148,3 +149,22 @@ class IntegrationTestMixin:
         )
         assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
         assert_daily_bar_sanity(df)
+
+    # -- get_stock_factor ---------------------------------------------------
+
+    def test_get_stock_factor(self):
+        """Well-formed factors for one symbol per market, and for a multi-symbol query."""
+        for symbol in ("000001.SZ", "600000.SH"):
+            df = self.source.get_stock_factor(trade_date=self.trade_date, symbol=symbol)
+            assert not df.empty, f"{symbol} returned empty DataFrame"
+            assert_has_columns(df, STOCK_FACTOR_COLUMNS)
+            assert (df["factor"] > 0).all(), "non-positive factor found"
+            assert (
+                df["date"].str.match(DATE_PATTERN).all()
+            ), "date not in YYYYMMDD format"
+
+        df = self.source.get_stock_factor(
+            trade_date=self.trade_date, symbol="000001.SZ,600000.SH"
+        )
+        assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
+        assert (df["factor"] > 0).all(), "non-positive factor found"

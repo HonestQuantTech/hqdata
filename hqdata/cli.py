@@ -228,6 +228,80 @@ def cmd_stock_daily(obj: dict, start: Optional[str], end: Optional[str]) -> None
     _run_for_sources(obj, fetch)
 
 
+@cli.command("stock-factor")
+@click.option(
+    "--start",
+    default=None,
+    metavar="YYYYMMDD",
+    help="Start date (default: current trading day)",
+)
+@click.option(
+    "--end",
+    default=None,
+    metavar="YYYYMMDD",
+    help="End date (default: current trading day)",
+)
+@click.pass_obj
+def cmd_stock_factor(obj: dict, start: Optional[str], end: Optional[str]) -> None:
+    """Fetch stock adjustment factors for a date range and save one CSV per trading day.
+
+    \b
+    Only fetches factors for stocks in that day's stock list, matching stock-daily.
+    """
+
+    def fetch(source: str, output_root: Path) -> None:
+        today = hqdata.get_current_trading_day()
+        actual_start = start or today
+        actual_end = end or today
+
+        calendar_df = hqdata.get_calendar(actual_start, actual_end, is_open=True)
+        trading_days = calendar_df["date"].tolist()
+
+        out_dir = output_root / source / "stock_factor"
+        skipped = 0
+        written = 0
+        for d in trading_days:
+            out_path = out_dir / f"{d}.csv"
+            if out_path.exists():
+                skipped += 1
+                continue
+
+            click.echo(f"[{source}][stock-factor] Fetching stock list for {d}...")
+            symbols = hqdata.get_stock_list(trade_date=d)["symbol"].tolist()
+            if not symbols:
+                continue
+
+            click.echo(
+                f"[{source}][stock-factor] Fetching factors for {d} "
+                f"({len(symbols)} symbols)..."
+            )
+            try:
+                df = hqdata.get_stock_factor(",".join(symbols), trade_date=d)
+            except Exception as e:
+                click.echo(f"[{source}][stock-factor] ERROR: {e}", err=True)
+                click.echo(
+                    f"[{source}][stock-factor] {written} day(s) already written. "
+                    "Re-run the same command to resume.",
+                    err=True,
+                )
+                return
+
+            if df is not None and not df.empty:
+                _write_csv(df, out_path)
+                written += 1
+
+        if skipped:
+            click.echo(
+                f"[{source}][stock-factor] Skipped {skipped} already-existing file(s)."
+            )
+        if written == 0 and skipped == 0:
+            click.echo(f"[{source}][stock-factor] No data fetched.")
+        else:
+            click.echo(f"[{source}][stock-factor] Done. Written to {out_dir}")
+
+    _run_for_sources(obj, fetch)
+
+
 # ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
