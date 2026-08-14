@@ -1052,6 +1052,53 @@ class TestCompareStockDaily:
         assert result.exit_code != 0
         assert "not matching the file name" in result.output
 
+    def test_sources_option_swaps_report_columns(self, runner, tmp_path):
+        """--sources ricequant,tushare (reversed default) should still work and
+        label the report columns/filename accordingly rather than assuming
+        tushare is always source A."""
+        write_stock_daily_csv(
+            tmp_path,
+            "tushare",
+            "20260105",
+            rows=[{"close": 20.0}],
+        )
+        write_stock_daily_csv(tmp_path, "ricequant", "20260105")
+
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "stock-daily",
+                "--sources",
+                "ricequant,tushare",
+            ],
+        )
+
+        assert result.exit_code != 0
+        report = pd.read_csv(
+            tmp_path / "compare" / "stock_daily_diff_ricequant_tushare.csv", dtype=str
+        )
+        assert "ricequant_value" in report.columns
+        assert "tushare_value" in report.columns
+
+    def test_invalid_sources_rejected(self, runner, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "stock-daily",
+                "--sources",
+                "tushare,akshare",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Invalid" in result.output
+
 
 class TestCompareStockFactor:
     def test_no_diff_first_day_has_no_prior_ratio(self, runner, tmp_path):
@@ -1159,3 +1206,55 @@ class TestCompareStockFactor:
 
         assert result.exit_code != 0
         assert "not matching the file name" in result.output
+
+    def test_non_default_sources_uses_suffixed_report_filename(self, runner, tmp_path):
+        """--sources ricequant,tushare (reversed default) is a non-default pair
+        and must not clobber the default pair's report filename."""
+        write_stock_factor_csv(
+            tmp_path, "tushare", "20260104", rows=[{"factor": 100.0}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "tushare", "20260105", rows=[{"factor": 121.7847}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "ricequant", "20260104", rows=[{"factor": 45.6}]
+        )
+        write_stock_factor_csv(
+            tmp_path, "ricequant", "20260105", rows=[{"factor": 47.88}]
+        )
+
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "stock-factor",
+                "--sources",
+                "ricequant,tushare",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert not (tmp_path / "compare" / "stock_factor_diff.csv").exists()
+        report = pd.read_csv(
+            tmp_path / "compare" / "stock_factor_diff_ricequant_tushare.csv", dtype=str
+        )
+        assert "ricequant_value" in report.columns
+        assert "tushare_value" in report.columns
+
+    def test_invalid_sources_rejected(self, runner, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "stock-factor",
+                "--sources",
+                "tushare,akshare",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Invalid" in result.output

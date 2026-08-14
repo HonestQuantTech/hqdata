@@ -7,10 +7,12 @@ import click
 import pandas as pd
 
 
-# compare calendar/stock-list can compare any two of these; compare
-# stock-daily/stock-factor stay fixed to tushare vs ricequant since akshare
-# doesn't produce that data (see CLAUDE.md/README).
+# compare calendar/stock-list can compare any two of these.
 _VALID_SOURCES = ["tushare", "ricequant", "akshare"]
+
+# compare stock-daily/stock-factor exclude akshare: it doesn't produce that
+# data (see CLAUDE.md/README), so there's nothing to compare it against yet.
+_VALID_SOURCES_DAILY_FACTOR = ["tushare", "ricequant"]
 
 _DEFAULT_SOURCE_PAIR = ("tushare", "ricequant")
 
@@ -110,7 +112,9 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
     df.to_csv(path, index=False, encoding="utf-8")
 
 
-def _parse_source_pair(sources: str) -> tuple[str, str]:
+def _parse_source_pair(
+    sources: str, valid_sources: list[str] = _VALID_SOURCES
+) -> tuple[str, str]:
     """Parse and validate a "SOURCE_A,SOURCE_B" --sources option value."""
     parts = [s.strip() for s in sources.split(",")]
     if len(parts) != 2:
@@ -119,10 +123,10 @@ def _parse_source_pair(sources: str) -> tuple[str, str]:
             param_hint="'--sources'",
         )
     source_a, source_b = parts
-    invalid = [s for s in (source_a, source_b) if s not in _VALID_SOURCES]
+    invalid = [s for s in (source_a, source_b) if s not in valid_sources]
     if invalid:
         raise click.BadParameter(
-            f"Invalid: {', '.join(invalid)}. Valid: {', '.join(_VALID_SOURCES)}",
+            f"Invalid: {', '.join(invalid)}. Valid: {', '.join(valid_sources)}",
             param_hint="'--sources'",
         )
     if source_a == source_b:
@@ -518,68 +522,72 @@ def _compute_factor_ratio(files: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
 
 def _compare_stock_factor_frames(
-    tushare_files: dict[str, pd.DataFrame], ricequant_files: dict[str, pd.DataFrame]
+    source_a: str,
+    files_a: dict[str, pd.DataFrame],
+    source_b: str,
+    files_b: dict[str, pd.DataFrame],
 ) -> list[dict[str, object]]:
+    suffix_a, suffix_b = f"_{source_a}", f"_{source_b}"
     rows: list[dict[str, object]] = []
 
-    common_dates = sorted(set(tushare_files) & set(ricequant_files))
+    common_dates = sorted(set(files_a) & set(files_b))
     for date in common_dates:
-        tushare_symbols = set(tushare_files[date]["symbol"])
-        ricequant_symbols = set(ricequant_files[date]["symbol"])
-        for symbol in sorted(tushare_symbols - ricequant_symbols):
+        symbols_a = set(files_a[date]["symbol"])
+        symbols_b = set(files_b[date]["symbol"])
+        for symbol in sorted(symbols_a - symbols_b):
             rows.append(
                 _diff_row(
-                    "tushare",
-                    "ricequant",
+                    source_a,
+                    source_b,
                     date,
                     symbol,
-                    "symbol_only_tushare",
+                    f"symbol_only_{source_a}",
                     value_a="present",
                 )
             )
-        for symbol in sorted(ricequant_symbols - tushare_symbols):
+        for symbol in sorted(symbols_b - symbols_a):
             rows.append(
                 _diff_row(
-                    "tushare",
-                    "ricequant",
+                    source_a,
+                    source_b,
                     date,
                     symbol,
-                    "symbol_only_ricequant",
+                    f"symbol_only_{source_b}",
                     value_b="present",
                 )
             )
 
-    tushare_ratio = _compute_factor_ratio(tushare_files)
-    ricequant_ratio = _compute_factor_ratio(ricequant_files)
-    merged = tushare_ratio.merge(
-        ricequant_ratio,
+    ratio_a = _compute_factor_ratio(files_a)
+    ratio_b = _compute_factor_ratio(files_b)
+    merged = ratio_a.merge(
+        ratio_b,
         on=["date", "symbol"],
         how="inner",
-        suffixes=("_tushare", "_ricequant"),
+        suffixes=(suffix_a, suffix_b),
     )
     # A NaN ratio just means "no prior data point in the loaded window" (e.g.
     # the very first date on disk) on one or both sides — not a discrepancy.
-    comparable = merged.dropna(subset=["ratio_tushare", "ratio_ricequant"])
+    comparable = merged.dropna(subset=[f"ratio{suffix_a}", f"ratio{suffix_b}"])
     mismatch = ~(
-        (comparable["ratio_tushare"] - comparable["ratio_ricequant"]).abs()
+        (comparable[f"ratio{suffix_a}"] - comparable[f"ratio{suffix_b}"]).abs()
         <= _STOCK_FACTOR_RATIO_TOLERANCE
     )
-    for date, symbol, tushare_value, ricequant_value in zip(
+    for date, symbol, value_a, value_b in zip(
         comparable.loc[mismatch, "date"],
         comparable.loc[mismatch, "symbol"],
-        comparable.loc[mismatch, "ratio_tushare"],
-        comparable.loc[mismatch, "ratio_ricequant"],
+        comparable.loc[mismatch, f"ratio{suffix_a}"],
+        comparable.loc[mismatch, f"ratio{suffix_b}"],
     ):
         rows.append(
             _diff_row(
-                "tushare",
-                "ricequant",
+                source_a,
+                source_b,
                 date,
                 symbol,
                 "value_mismatch",
                 "ratio",
-                tushare_value,
-                ricequant_value,
+                value_a,
+                value_b,
             )
         )
 
@@ -614,71 +622,77 @@ def _load_stock_daily_dir(path: Path, source: str) -> dict[str, pd.DataFrame]:
 
 
 def _compare_stock_daily_frames(
-    tushare_df: pd.DataFrame, ricequant_df: pd.DataFrame
+    source_a: str, df_a: pd.DataFrame, source_b: str, df_b: pd.DataFrame
 ) -> list[dict[str, object]]:
-    merged = tushare_df.merge(
-        ricequant_df,
+    suffix_a, suffix_b = f"_{source_a}", f"_{source_b}"
+    merged = df_a.merge(
+        df_b,
         on=["date", "symbol"],
         how="outer",
-        suffixes=("_tushare", "_ricequant"),
+        suffixes=(suffix_a, suffix_b),
         indicator=True,
     )
 
     rows: list[dict[str, object]] = []
 
-    for row in merged[merged["_merge"] == "left_only"].itertuples():
+    # rqdatac's get_price pads suspension days with placeholder rows
+    # (volume=0, OHLC=pre_close) while tushare's daily omits suspended stocks
+    # entirely — that's a representation difference, not a data difference.
+    # Only ricequant does this, so the one-sided-only-if-volume>0 filter is
+    # applied to whichever side is ricequant, regardless of a/b position.
+    only_a = merged[merged["_merge"] == "left_only"]
+    if source_a == "ricequant":
+        only_a = only_a[only_a[f"volume{suffix_a}"] > 0]
+    for row in only_a.itertuples():
         rows.append(
             _diff_row(
-                "tushare",
-                "ricequant",
+                source_a,
+                source_b,
                 row.date,
                 row.symbol,
-                "symbol_only_tushare",
+                f"symbol_only_{source_a}",
                 value_a="present",
             )
         )
 
-    # rqdatac's get_price pads suspension days with placeholder rows
-    # (volume=0, OHLC=pre_close) while tushare's daily omits suspended stocks
-    # entirely — that's a representation difference, not a data difference.
-    only_ricequant = merged[
-        (merged["_merge"] == "right_only") & (merged["volume_ricequant"] > 0)
-    ]
-    for row in only_ricequant.itertuples():
+    only_b = merged[merged["_merge"] == "right_only"]
+    if source_b == "ricequant":
+        only_b = only_b[only_b[f"volume{suffix_b}"] > 0]
+    for row in only_b.itertuples():
         rows.append(
             _diff_row(
-                "tushare",
-                "ricequant",
+                source_a,
+                source_b,
                 row.date,
                 row.symbol,
-                "symbol_only_ricequant",
+                f"symbol_only_{source_b}",
                 value_b="present",
             )
         )
 
     both = merged[merged["_merge"] == "both"]
     for field, tolerance in _STOCK_DAILY_FIELD_TOLERANCES.items():
-        tushare_values = both[f"{field}_tushare"]
-        ricequant_values = both[f"{field}_ricequant"]
+        values_a = both[f"{field}{suffix_a}"]
+        values_b = both[f"{field}{suffix_b}"]
         # ~(diff <= tol) rather than (diff > tol) so NaN on either side counts
         # as a mismatch instead of being silently treated as equal.
-        mismatch = ~((tushare_values - ricequant_values).abs() <= tolerance)
-        for date, symbol, tushare_value, ricequant_value in zip(
+        mismatch = ~((values_a - values_b).abs() <= tolerance)
+        for date, symbol, value_a, value_b in zip(
             both.loc[mismatch, "date"],
             both.loc[mismatch, "symbol"],
-            tushare_values[mismatch],
-            ricequant_values[mismatch],
+            values_a[mismatch],
+            values_b[mismatch],
         ):
             rows.append(
                 _diff_row(
-                    "tushare",
-                    "ricequant",
+                    source_a,
+                    source_b,
                     date,
                     symbol,
                     "value_mismatch",
                     field,
-                    tushare_value,
-                    ricequant_value,
+                    value_a,
+                    value_b,
                 )
             )
 
@@ -762,30 +776,33 @@ def cmd_compare_stock_list(ctx: click.Context, sources: str) -> None:
 
 
 @compare.command("stock-daily")
+@click.option(
+    "--sources",
+    default="tushare,ricequant",
+    metavar="SOURCE_A,SOURCE_B",
+    help=f"Comma-separated pair of sources to compare. Valid: {', '.join(_VALID_SOURCES_DAILY_FACTOR)}. Default: tushare,ricequant",
+)
 @click.pass_context
-def cmd_compare_stock_daily(ctx: click.Context) -> None:
-    """Compare stored tushare/ricequant stock_daily CSV files."""
+def cmd_compare_stock_daily(ctx: click.Context, sources: str) -> None:
+    """Compare stored stock_daily CSV files between two sources."""
 
+    source_a, source_b = _parse_source_pair(sources, _VALID_SOURCES_DAILY_FACTOR)
     output_root = ctx.obj["output_root"]
-    tushare_files = _load_stock_daily_dir(
-        output_root / "tushare" / "stock_daily", "tushare"
-    )
-    ricequant_files = _load_stock_daily_dir(
-        output_root / "ricequant" / "stock_daily", "ricequant"
-    )
-    tushare_dates = set(tushare_files)
-    ricequant_dates = set(ricequant_files)
+    files_a = _load_stock_daily_dir(output_root / source_a / "stock_daily", source_a)
+    files_b = _load_stock_daily_dir(output_root / source_b / "stock_daily", source_b)
+    dates_a = set(files_a)
+    dates_b = set(files_b)
 
-    rows = _diff_file_presence(
-        output_root, "tushare", tushare_dates, "ricequant", ricequant_dates
-    )
-    for date in sorted(tushare_dates & ricequant_dates):
+    rows = _diff_file_presence(output_root, source_a, dates_a, source_b, dates_b)
+    for date in sorted(dates_a & dates_b):
         rows.extend(
-            _compare_stock_daily_frames(tushare_files[date], ricequant_files[date])
+            _compare_stock_daily_frames(
+                source_a, files_a[date], source_b, files_b[date]
+            )
         )
 
     diff = (
-        pd.DataFrame(rows, columns=_diff_columns("tushare", "ricequant"))
+        pd.DataFrame(rows, columns=_diff_columns(source_a, source_b))
         .sort_values(["date", "symbol", "status", "field"])
         .reset_index(drop=True)
     )
@@ -793,14 +810,22 @@ def cmd_compare_stock_daily(ctx: click.Context) -> None:
         ctx,
         "compare stock-daily",
         diff,
-        output_root / "compare" / "stock_daily_diff.csv",
+        output_root
+        / "compare"
+        / _diff_report_filename("stock_daily_diff", source_a, source_b),
     )
 
 
 @compare.command("stock-factor")
+@click.option(
+    "--sources",
+    default="tushare,ricequant",
+    metavar="SOURCE_A,SOURCE_B",
+    help=f"Comma-separated pair of sources to compare. Valid: {', '.join(_VALID_SOURCES_DAILY_FACTOR)}. Default: tushare,ricequant",
+)
 @click.pass_context
-def cmd_compare_stock_factor(ctx: click.Context) -> None:
-    """Compare stored tushare/ricequant stock_factor CSV files.
+def cmd_compare_stock_factor(ctx: click.Context, sources: str) -> None:
+    """Compare stored stock_factor CSV files between two sources.
 
     \b
     factor's raw value isn't comparable across sources (each anchors its
@@ -810,23 +835,18 @@ def cmd_compare_stock_factor(ctx: click.Context) -> None:
     day, regardless of anchor.
     """
 
+    source_a, source_b = _parse_source_pair(sources, _VALID_SOURCES_DAILY_FACTOR)
     output_root = ctx.obj["output_root"]
-    tushare_files = _load_stock_factor_dir(
-        output_root / "tushare" / "stock_factor", "tushare"
-    )
-    ricequant_files = _load_stock_factor_dir(
-        output_root / "ricequant" / "stock_factor", "ricequant"
-    )
-    tushare_dates = set(tushare_files)
-    ricequant_dates = set(ricequant_files)
+    files_a = _load_stock_factor_dir(output_root / source_a / "stock_factor", source_a)
+    files_b = _load_stock_factor_dir(output_root / source_b / "stock_factor", source_b)
+    dates_a = set(files_a)
+    dates_b = set(files_b)
 
-    rows = _diff_file_presence(
-        output_root, "tushare", tushare_dates, "ricequant", ricequant_dates
-    )
-    rows.extend(_compare_stock_factor_frames(tushare_files, ricequant_files))
+    rows = _diff_file_presence(output_root, source_a, dates_a, source_b, dates_b)
+    rows.extend(_compare_stock_factor_frames(source_a, files_a, source_b, files_b))
 
     diff = (
-        pd.DataFrame(rows, columns=_diff_columns("tushare", "ricequant"))
+        pd.DataFrame(rows, columns=_diff_columns(source_a, source_b))
         .sort_values(["date", "symbol", "status", "field"])
         .reset_index(drop=True)
     )
@@ -834,5 +854,7 @@ def cmd_compare_stock_factor(ctx: click.Context) -> None:
         ctx,
         "compare stock-factor",
         diff,
-        output_root / "compare" / "stock_factor_diff.csv",
+        output_root
+        / "compare"
+        / _diff_report_filename("stock_factor_diff", source_a, source_b),
     )
