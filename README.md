@@ -17,13 +17,13 @@
 
 ## 支持的主要功能
 
-| 功能         | API                    | tushare | ricequant | 说明                             |
-| ------------ | ---------------------- | :-----: | :-------: | -------------------------------- |
-| 交易日历     | `get_calendar`         |    ✓    |     ✓     |                                  |
-| 股票列表     | `get_stock_list`       |    ✓    |     ✓     | 获取指定交易日当天的上市股票列表 |
-| 股票实时快照 | `get_stock_snapshot`   |    ✓    |     ✓     | 含5档盘口                        |
-| 股票日线     | `get_stock_daily_bar`  |    ✓    |     ✓     |                                  |
-| 复权因子     | `get_stock_factor`     |    ✓    |     ✓     | 累积后复权乘数，见下方说明       |
+| 功能         | API                   | tushare | ricequant | 说明                             |
+| ------------ | --------------------- | :-----: | :-------: | -------------------------------- |
+| 交易日历     | `get_calendar`        |    ✓    |     ✓     |                                  |
+| 股票列表     | `get_stock_list`      |    ✓    |     ✓     | 获取指定交易日当天的上市股票列表 |
+| 股票实时快照 | `get_stock_snapshot`  |    ✓    |     ✓     | 含5档盘口                        |
+| 股票日线     | `get_stock_daily_bar` |    ✓    |     ✓     |                                  |
+| 复权因子     | `get_stock_factor`    |    ✓    |     ✓     | 累积后复权乘数                   |
 
 另有更多功能，可以前往api.py查看所有功能。
 
@@ -109,68 +109,11 @@ hqdata [--source SOURCE] [--output DIR] COMMAND [options]
 
 使用子命令和 `--help` 可查看具体用法
 
-已落盘数据也可以直接做对比，当前已支持交易日历对比：
+已落盘数据都可以直接做对比，以交易日历举例：
 
 ```bash
 hqdata --output ~/.hqdata compare calendar
 ```
-
-该命令会读取 `~/.hqdata/tushare/calendar.csv` 和 `~/.hqdata/ricequant/calendar.csv`。
-
-- 若无差异，命令返回成功
-- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/calendar_diff.csv`
-
-股票列表也可以直接对比：
-
-```bash
-hqdata --output ~/.hqdata compare stock-list
-```
-
-该命令会读取 `~/.hqdata/tushare/stock_list/*.csv` 和 `~/.hqdata/ricequant/stock_list/*.csv`。
-
-- 若无差异，命令返回成功
-- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/stock_list_diff.csv`
-- 校验规则：
-  - 文件内 `date` 列必须与文件名一致，否则直接报错
-  - 若某一侧存在非交易日（按该源 calendar.csv 判定）的文件，报 `file_not_trading_day_*` 差异
-  - `delist_date` 晚于快照日（尚未生效的退市日）视同空值，不算差异——两家数据源填写时点不同
-  - 临近退市（`delist_date` 非空且晚于快照日）的股票不比较 `name`——退市整理期改名（"XX退"）两家时点不同（ricequant 提前改，tushare 保留 *ST 名直到退市）；其余股票 `name` 精确对比
-
-股票日线也可以直接对比：
-
-```bash
-hqdata --output ~/.hqdata compare stock-daily
-```
-
-该命令会读取 `~/.hqdata/tushare/stock_daily/*.csv` 和 `~/.hqdata/ricequant/stock_daily/*.csv`。
-
-- 若无差异，命令返回成功
-- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/stock_daily_diff.csv`
-- 校验规则（`date` 列/非交易日文件的规则与 stock-list 相同），数值字段按以下容差对比：
-  - `turnover`：容差 2 元——tushare 的千元转元只精确到元，ricequant 保留角分，噪声最大 1 元（再留出浮点表示误差）
-  - `pct_change`：容差 0.00015——ricequant 侧由 hqdata 本地计算，与 tushare 官方值可差一个末位舍入（0.0001）
-  - 其余字段（pre_close/open/high/low/close/volume/change）精确对比——真实数据验证 76 万行完全一致，出现差异即为真实数据分歧
-  - ricequant 独有且 `volume=0` 的行视为停牌占位行，不算差异——rqdatac 为停牌日填充占位行（OHLC=昨收、成交量0），tushare 不返回停牌股，属于表示方式差异
-
-复权因子也可以直接落盘：
-
-```bash
-hqdata stock-factor --start 20260101 --end 20260401
-```
-
-只拉取当天 stock-list 中股票的复权因子（一天一个 CSV，落盘在 `stock_factor/` 目录下），用法和 `stock-daily` 一致。
-
-也可以直接对比：
-
-```bash
-hqdata --output ~/.hqdata compare stock-factor
-```
-
-该命令会读取 `~/.hqdata/tushare/stock_factor/*.csv` 和 `~/.hqdata/ricequant/stock_factor/*.csv`。
-
-- 若无差异，命令返回成功
-- 若有差异，命令返回非 0，并写出 `~/.hqdata/compare/stock_factor_diff.csv`
-- 校验规则：`factor` 原始值不可跨源比较（两家的累积基准点不同），因此比较的是跨日比值 `factor[t] / factor[t-1]`（正常日应为1.0，除权日应等于除权比例，与基准点无关）；容差 0.001——真实数据验证（23 个交易日 × ~5500 只股票，约 12 万个跨日比值对）显示 99.9% 完全一致（浮点噪声 < 2e-6），仅有的 17 处差异都是真实除权日两家对除权价舍入方式不同导致（最大相对误差 6e-4，多为纯现金分红事件）
 
 ## 测试
 
