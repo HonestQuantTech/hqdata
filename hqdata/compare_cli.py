@@ -7,6 +7,13 @@ import click
 import pandas as pd
 
 
+# compare calendar/stock-list can compare any two of these; compare
+# stock-daily/stock-factor stay fixed to tushare vs ricequant since akshare
+# doesn't produce that data (see CLAUDE.md/README).
+_VALID_SOURCES = ["tushare", "ricequant", "akshare"]
+
+_DEFAULT_SOURCE_PAIR = ("tushare", "ricequant")
+
 _EXCHANGE_NORMALIZE_MAP = {
     "BJSE": "BSE",
     "XSHG": "SSE",
@@ -23,15 +30,6 @@ _STOCK_LIST_COLUMNS = [
     "curr_type",
     "list_date",
     "delist_date",
-]
-
-_DIFF_COLUMNS = [
-    "date",
-    "symbol",
-    "status",
-    "field",
-    "tushare_value",
-    "ricequant_value",
 ]
 
 _STOCK_COMPARE_FIELDS = [
@@ -112,6 +110,36 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
     df.to_csv(path, index=False, encoding="utf-8")
 
 
+def _parse_source_pair(sources: str) -> tuple[str, str]:
+    """Parse and validate a "SOURCE_A,SOURCE_B" --sources option value."""
+    parts = [s.strip() for s in sources.split(",")]
+    if len(parts) != 2:
+        raise click.BadParameter(
+            f"Expected exactly 2 comma-separated sources, got: {sources}",
+            param_hint="'--sources'",
+        )
+    source_a, source_b = parts
+    invalid = [s for s in (source_a, source_b) if s not in _VALID_SOURCES]
+    if invalid:
+        raise click.BadParameter(
+            f"Invalid: {', '.join(invalid)}. Valid: {', '.join(_VALID_SOURCES)}",
+            param_hint="'--sources'",
+        )
+    if source_a == source_b:
+        raise click.BadParameter(
+            f"Sources must be different, got '{source_a}' twice",
+            param_hint="'--sources'",
+        )
+    return source_a, source_b
+
+
+def _diff_report_filename(base: str, source_a: str, source_b: str) -> str:
+    """{base}.csv for the default tushare/ricequant pair; {base}_{a}_{b}.csv otherwise."""
+    if (source_a, source_b) == _DEFAULT_SOURCE_PAIR:
+        return f"{base}.csv"
+    return f"{base}_{source_a}_{source_b}.csv"
+
+
 def _normalize_basic_date(value: object) -> str:
     if value is None:
         return ""
@@ -182,26 +210,43 @@ def _load_non_trading_days(output_root: Path, source: str) -> set[str]:
     return set(calendar.loc[calendar["is_open"] != "Y", "date"])
 
 
+def _diff_columns(source_a: str, source_b: str) -> list[str]:
+    return [
+        "date",
+        "symbol",
+        "status",
+        "field",
+        f"{source_a}_value",
+        f"{source_b}_value",
+    ]
+
+
 def _diff_row(
+    source_a: str,
+    source_b: str,
     date: object,
     symbol: object,
     status: str,
     field: str = "",
-    tushare_value: object = "",
-    ricequant_value: object = "",
+    value_a: object = "",
+    value_b: object = "",
 ) -> dict[str, object]:
     return {
         "date": date,
         "symbol": symbol,
         "status": status,
         "field": field,
-        "tushare_value": tushare_value,
-        "ricequant_value": ricequant_value,
+        f"{source_a}_value": value_a,
+        f"{source_b}_value": value_b,
     }
 
 
 def _diff_file_presence(
-    output_root: Path, tushare_dates: set[str], ricequant_dates: set[str]
+    output_root: Path,
+    source_a: str,
+    dates_a: set[str],
+    source_b: str,
+    dates_b: set[str],
 ) -> list[dict[str, object]]:
     """Diff rows for file-level presence: non-trading-day files and one-sided files.
 
@@ -211,25 +256,33 @@ def _diff_file_presence(
     """
     rows: list[dict[str, object]] = []
 
-    for source, dates in (("tushare", tushare_dates), ("ricequant", ricequant_dates)):
+    for source, dates in ((source_a, dates_a), (source_b, dates_b)):
         non_trading_days = _load_non_trading_days(output_root, source)
         for date in sorted(dates & non_trading_days):
             rows.append(
                 _diff_row(
+                    source_a,
+                    source_b,
                     date,
                     "",
                     f"file_not_trading_day_{source}",
-                    tushare_value="present" if source == "tushare" else "",
-                    ricequant_value="present" if source == "ricequant" else "",
+                    value_a="present" if source == source_a else "",
+                    value_b="present" if source == source_b else "",
                 )
             )
 
-    for date in sorted(tushare_dates - ricequant_dates):
-        rows.append(_diff_row(date, "", "file_only_tushare", tushare_value="present"))
-
-    for date in sorted(ricequant_dates - tushare_dates):
+    for date in sorted(dates_a - dates_b):
         rows.append(
-            _diff_row(date, "", "file_only_ricequant", ricequant_value="present")
+            _diff_row(
+                source_a, source_b, date, "", f"file_only_{source_a}", value_a="present"
+            )
+        )
+
+    for date in sorted(dates_b - dates_a):
+        rows.append(
+            _diff_row(
+                source_a, source_b, date, "", f"file_only_{source_b}", value_b="present"
+            )
         )
 
     return rows
@@ -270,41 +323,37 @@ def _load_calendar_csv(path: Path, source: str) -> pd.DataFrame:
 
 
 def _compare_calendar_frames(
-    tushare_df: pd.DataFrame, ricequant_df: pd.DataFrame
+    source_a: str, df_a: pd.DataFrame, source_b: str, df_b: pd.DataFrame
 ) -> pd.DataFrame:
-    merged = tushare_df.merge(
-        ricequant_df,
+    suffix_a, suffix_b = f"_{source_a}", f"_{source_b}"
+    is_open_a, is_open_b = f"is_open{suffix_a}", f"is_open{suffix_b}"
+    col_a, col_b = f"{source_a}_is_open", f"{source_b}_is_open"
+
+    merged = df_a.merge(
+        df_b,
         on="date",
         how="outer",
-        suffixes=("_tushare", "_ricequant"),
+        suffixes=(suffix_a, suffix_b),
         indicator=True,
     )
 
-    only_tushare = merged[merged["_merge"] == "left_only"].copy()
-    only_tushare["status"] = "only_tushare"
+    only_a = merged[merged["_merge"] == "left_only"].copy()
+    only_a["status"] = f"only_{source_a}"
 
-    only_ricequant = merged[merged["_merge"] == "right_only"].copy()
-    only_ricequant["status"] = "only_ricequant"
+    only_b = merged[merged["_merge"] == "right_only"].copy()
+    only_b["status"] = f"only_{source_b}"
 
     mismatched = merged[
-        (merged["_merge"] == "both")
-        & (merged["is_open_tushare"] != merged["is_open_ricequant"])
+        (merged["_merge"] == "both") & (merged[is_open_a] != merged[is_open_b])
     ].copy()
     mismatched["status"] = "mismatch_is_open"
 
-    diff = pd.concat([mismatched, only_tushare, only_ricequant], ignore_index=True)
+    diff = pd.concat([mismatched, only_a, only_b], ignore_index=True)
     if diff.empty:
-        return pd.DataFrame(
-            columns=["date", "status", "tushare_is_open", "ricequant_is_open"]
-        )
+        return pd.DataFrame(columns=["date", "status", col_a, col_b])
 
-    diff = diff.rename(
-        columns={
-            "is_open_tushare": "tushare_is_open",
-            "is_open_ricequant": "ricequant_is_open",
-        }
-    )
-    cols = ["date", "status", "tushare_is_open", "ricequant_is_open"]
+    diff = diff.rename(columns={is_open_a: col_a, is_open_b: col_b})
+    cols = ["date", "status", col_a, col_b]
     return diff[cols].sort_values(["date", "status"]).reset_index(drop=True)
 
 
@@ -340,13 +389,14 @@ def _load_stock_list_dir(path: Path, source: str) -> dict[str, pd.DataFrame]:
 
 
 def _compare_stock_list_frames(
-    tushare_df: pd.DataFrame, ricequant_df: pd.DataFrame
+    source_a: str, df_a: pd.DataFrame, source_b: str, df_b: pd.DataFrame
 ) -> list[dict[str, object]]:
-    merged = tushare_df.merge(
-        ricequant_df,
+    suffix_a, suffix_b = f"_{source_a}", f"_{source_b}"
+    merged = df_a.merge(
+        df_b,
         on=["date", "symbol"],
         how="outer",
-        suffixes=("_tushare", "_ricequant"),
+        suffixes=(suffix_a, suffix_b),
         indicator=True,
     )
 
@@ -355,57 +405,67 @@ def _compare_stock_list_frames(
     for row in merged[merged["_merge"] == "left_only"].itertuples():
         rows.append(
             _diff_row(
-                row.date, row.symbol, "symbol_only_tushare", tushare_value="present"
+                source_a,
+                source_b,
+                row.date,
+                row.symbol,
+                f"symbol_only_{source_a}",
+                value_a="present",
             )
         )
 
     for row in merged[merged["_merge"] == "right_only"].itertuples():
         rows.append(
             _diff_row(
-                row.date, row.symbol, "symbol_only_ricequant", ricequant_value="present"
+                source_a,
+                source_b,
+                row.date,
+                row.symbol,
+                f"symbol_only_{source_b}",
+                value_b="present",
             )
         )
 
     both = merged[merged["_merge"] == "both"]
     # Stocks approaching delisting (delist_date set and later than the snapshot
     # date) are renamed to the delisting-period name ("XX退") at different times
-    # by the two sources (ricequant renames early, tushare keeps the *ST name),
-    # so name differences are only compared outside that window.
+    # by different sources (e.g. ricequant renames early, tushare keeps the *ST
+    # name), so name differences are only compared outside that window.
     pending_delist = (
-        (both["delist_date_tushare"] != "")
-        & (both["delist_date_tushare"] > both["date"])
+        (both[f"delist_date{suffix_a}"] != "")
+        & (both[f"delist_date{suffix_a}"] > both["date"])
     ) | (
-        (both["delist_date_ricequant"] != "")
-        & (both["delist_date_ricequant"] > both["date"])
+        (both[f"delist_date{suffix_b}"] != "")
+        & (both[f"delist_date{suffix_b}"] > both["date"])
     )
     for field in _STOCK_COMPARE_FIELDS:
-        tushare_values = both[f"{field}_tushare"]
-        ricequant_values = both[f"{field}_ricequant"]
+        values_a = both[f"{field}{suffix_a}"]
+        values_b = both[f"{field}{suffix_b}"]
         if field == "name":
-            tushare_values = tushare_values.mask(pending_delist, "")
-            ricequant_values = ricequant_values.mask(pending_delist, "")
+            values_a = values_a.mask(pending_delist, "")
+            values_b = values_b.mask(pending_delist, "")
         if field == "delist_date":
             # A delist date later than the snapshot date has not taken effect yet;
             # sources fill it at different times, so treat it as empty.
-            tushare_values = tushare_values.mask(tushare_values > both["date"], "")
-            ricequant_values = ricequant_values.mask(
-                ricequant_values > both["date"], ""
-            )
-        mismatch = tushare_values != ricequant_values
-        for date, symbol, tushare_value, ricequant_value in zip(
+            values_a = values_a.mask(values_a > both["date"], "")
+            values_b = values_b.mask(values_b > both["date"], "")
+        mismatch = values_a != values_b
+        for date, symbol, value_a, value_b in zip(
             both.loc[mismatch, "date"],
             both.loc[mismatch, "symbol"],
-            tushare_values[mismatch],
-            ricequant_values[mismatch],
+            values_a[mismatch],
+            values_b[mismatch],
         ):
             rows.append(
                 _diff_row(
+                    source_a,
+                    source_b,
                     date,
                     symbol,
                     "value_mismatch",
                     field,
-                    tushare_value,
-                    ricequant_value,
+                    value_a,
+                    value_b,
                 )
             )
 
@@ -468,12 +528,24 @@ def _compare_stock_factor_frames(
         ricequant_symbols = set(ricequant_files[date]["symbol"])
         for symbol in sorted(tushare_symbols - ricequant_symbols):
             rows.append(
-                _diff_row(date, symbol, "symbol_only_tushare", tushare_value="present")
+                _diff_row(
+                    "tushare",
+                    "ricequant",
+                    date,
+                    symbol,
+                    "symbol_only_tushare",
+                    value_a="present",
+                )
             )
         for symbol in sorted(ricequant_symbols - tushare_symbols):
             rows.append(
                 _diff_row(
-                    date, symbol, "symbol_only_ricequant", ricequant_value="present"
+                    "tushare",
+                    "ricequant",
+                    date,
+                    symbol,
+                    "symbol_only_ricequant",
+                    value_b="present",
                 )
             )
 
@@ -500,7 +572,14 @@ def _compare_stock_factor_frames(
     ):
         rows.append(
             _diff_row(
-                date, symbol, "value_mismatch", "ratio", tushare_value, ricequant_value
+                "tushare",
+                "ricequant",
+                date,
+                symbol,
+                "value_mismatch",
+                "ratio",
+                tushare_value,
+                ricequant_value,
             )
         )
 
@@ -550,7 +629,12 @@ def _compare_stock_daily_frames(
     for row in merged[merged["_merge"] == "left_only"].itertuples():
         rows.append(
             _diff_row(
-                row.date, row.symbol, "symbol_only_tushare", tushare_value="present"
+                "tushare",
+                "ricequant",
+                row.date,
+                row.symbol,
+                "symbol_only_tushare",
+                value_a="present",
             )
         )
 
@@ -563,7 +647,12 @@ def _compare_stock_daily_frames(
     for row in only_ricequant.itertuples():
         rows.append(
             _diff_row(
-                row.date, row.symbol, "symbol_only_ricequant", ricequant_value="present"
+                "tushare",
+                "ricequant",
+                row.date,
+                row.symbol,
+                "symbol_only_ricequant",
+                value_b="present",
             )
         )
 
@@ -582,6 +671,8 @@ def _compare_stock_daily_frames(
         ):
             rows.append(
                 _diff_row(
+                    "tushare",
+                    "ricequant",
                     date,
                     symbol,
                     "value_mismatch",
@@ -605,45 +696,58 @@ def compare() -> None:
 
 
 @compare.command("calendar")
+@click.option(
+    "--sources",
+    default="tushare,ricequant",
+    metavar="SOURCE_A,SOURCE_B",
+    help=f"Comma-separated pair of sources to compare. Valid: {', '.join(_VALID_SOURCES)}. Default: tushare,ricequant",
+)
 @click.pass_context
-def cmd_compare_calendar(ctx: click.Context) -> None:
-    """Compare stored tushare/ricequant calendar.csv files."""
+def cmd_compare_calendar(ctx: click.Context, sources: str) -> None:
+    """Compare stored calendar.csv files between two sources."""
 
+    source_a, source_b = _parse_source_pair(sources)
     output_root = ctx.obj["output_root"]
-    tushare_df = _load_calendar_csv(output_root / "tushare" / "calendar.csv", "tushare")
-    ricequant_df = _load_calendar_csv(
-        output_root / "ricequant" / "calendar.csv", "ricequant"
-    )
-    diff = _compare_calendar_frames(tushare_df, ricequant_df)
+    df_a = _load_calendar_csv(output_root / source_a / "calendar.csv", source_a)
+    df_b = _load_calendar_csv(output_root / source_b / "calendar.csv", source_b)
+    diff = _compare_calendar_frames(source_a, df_a, source_b, df_b)
 
     _finish_compare(
-        ctx, "compare calendar", diff, output_root / "compare" / "calendar_diff.csv"
+        ctx,
+        "compare calendar",
+        diff,
+        output_root
+        / "compare"
+        / _diff_report_filename("calendar_diff", source_a, source_b),
     )
 
 
 @compare.command("stock-list")
+@click.option(
+    "--sources",
+    default="tushare,ricequant",
+    metavar="SOURCE_A,SOURCE_B",
+    help=f"Comma-separated pair of sources to compare. Valid: {', '.join(_VALID_SOURCES)}. Default: tushare,ricequant",
+)
 @click.pass_context
-def cmd_compare_stock_list(ctx: click.Context) -> None:
-    """Compare stored tushare/ricequant stock_list CSV files."""
+def cmd_compare_stock_list(ctx: click.Context, sources: str) -> None:
+    """Compare stored stock_list CSV files between two sources."""
 
+    source_a, source_b = _parse_source_pair(sources)
     output_root = ctx.obj["output_root"]
-    tushare_files = _load_stock_list_dir(
-        output_root / "tushare" / "stock_list", "tushare"
-    )
-    ricequant_files = _load_stock_list_dir(
-        output_root / "ricequant" / "stock_list", "ricequant"
-    )
-    tushare_dates = set(tushare_files)
-    ricequant_dates = set(ricequant_files)
+    files_a = _load_stock_list_dir(output_root / source_a / "stock_list", source_a)
+    files_b = _load_stock_list_dir(output_root / source_b / "stock_list", source_b)
+    dates_a = set(files_a)
+    dates_b = set(files_b)
 
-    rows = _diff_file_presence(output_root, tushare_dates, ricequant_dates)
-    for date in sorted(tushare_dates & ricequant_dates):
+    rows = _diff_file_presence(output_root, source_a, dates_a, source_b, dates_b)
+    for date in sorted(dates_a & dates_b):
         rows.extend(
-            _compare_stock_list_frames(tushare_files[date], ricequant_files[date])
+            _compare_stock_list_frames(source_a, files_a[date], source_b, files_b[date])
         )
 
     diff = (
-        pd.DataFrame(rows, columns=_DIFF_COLUMNS)
+        pd.DataFrame(rows, columns=_diff_columns(source_a, source_b))
         .sort_values(["date", "symbol", "status", "field"])
         .reset_index(drop=True)
     )
@@ -651,7 +755,9 @@ def cmd_compare_stock_list(ctx: click.Context) -> None:
         ctx,
         "compare stock-list",
         diff,
-        output_root / "compare" / "stock_list_diff.csv",
+        output_root
+        / "compare"
+        / _diff_report_filename("stock_list_diff", source_a, source_b),
     )
 
 
@@ -670,14 +776,16 @@ def cmd_compare_stock_daily(ctx: click.Context) -> None:
     tushare_dates = set(tushare_files)
     ricequant_dates = set(ricequant_files)
 
-    rows = _diff_file_presence(output_root, tushare_dates, ricequant_dates)
+    rows = _diff_file_presence(
+        output_root, "tushare", tushare_dates, "ricequant", ricequant_dates
+    )
     for date in sorted(tushare_dates & ricequant_dates):
         rows.extend(
             _compare_stock_daily_frames(tushare_files[date], ricequant_files[date])
         )
 
     diff = (
-        pd.DataFrame(rows, columns=_DIFF_COLUMNS)
+        pd.DataFrame(rows, columns=_diff_columns("tushare", "ricequant"))
         .sort_values(["date", "symbol", "status", "field"])
         .reset_index(drop=True)
     )
@@ -712,11 +820,13 @@ def cmd_compare_stock_factor(ctx: click.Context) -> None:
     tushare_dates = set(tushare_files)
     ricequant_dates = set(ricequant_files)
 
-    rows = _diff_file_presence(output_root, tushare_dates, ricequant_dates)
+    rows = _diff_file_presence(
+        output_root, "tushare", tushare_dates, "ricequant", ricequant_dates
+    )
     rows.extend(_compare_stock_factor_frames(tushare_files, ricequant_files))
 
     diff = (
-        pd.DataFrame(rows, columns=_DIFF_COLUMNS)
+        pd.DataFrame(rows, columns=_diff_columns("tushare", "ricequant"))
         .sort_values(["date", "symbol", "status", "field"])
         .reset_index(drop=True)
     )

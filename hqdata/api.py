@@ -8,11 +8,13 @@ _source: Optional["BaseSource"] = None
 _calendar: Optional["TradingCalendar"] = None
 
 
-def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
+def init_source(
+    source_type: Literal["ricequant", "tushare", "akshare"], **kwargs
+) -> None:
     """Initialize data source.
 
     Args:
-        source_type: "ricequant" or "tushare"
+        source_type: "ricequant", "tushare" or "akshare"
         **kwargs: Source-specific credentials
     """
     global _source, _calendar
@@ -24,6 +26,10 @@ def init_source(source_type: Literal["ricequant", "tushare"], **kwargs) -> None:
         from hqdata.sources.tushare import TushareSource
 
         _source = TushareSource(**kwargs)
+    elif source_type == "akshare":
+        from hqdata.sources.akshare import AkshareSource
+
+        _source = AkshareSource(**kwargs)
     else:
         raise ValueError(f"Unknown source type: {source_type}")
 

@@ -27,6 +27,7 @@ keywords = [
     "algotrading",
 	"tushare",
 	"ricequant",
+	"akshare",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",          # 早期阶段
@@ -57,6 +58,9 @@ tushare = [
 ]
 ricequant = [
     "rqdatac>=3.1.4",
+]
+akshare = [
+    "akshare>=1.18.91",
 ]
 dev = [
     "pytest>=7.0",

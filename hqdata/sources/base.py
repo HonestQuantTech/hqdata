@@ -135,7 +135,6 @@ class BaseSource(ABC):
         """
         pass
 
-    @abstractmethod
     def get_stock_daily_bar(
         self,
         symbol: str,
@@ -144,6 +143,10 @@ class BaseSource(ABC):
         trading_days: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get daily bar data for stocks.
+
+        Note:
+            Optional capability. Sources that don't support this raise
+            NotImplementedError instead of implementing it.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
@@ -154,9 +157,10 @@ class BaseSource(ABC):
         Returns:
             DataFrame with columns: symbol, date, pre_close, open, high, low, close, volume, turnover, change, pct_change
         """
-        pass
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support get_stock_daily_bar"
+        )
 
-    @abstractmethod
     def get_stock_factor(
         self,
         trade_date: str,
@@ -170,6 +174,9 @@ class BaseSource(ABC):
             across sources by raw value (each anchors its cumulative factor to a different
             base point); only day-over-day ratios (factor[t] / factor[t-1]) are comparable.
 
+            Optional capability. Sources that don't support this raise
+            NotImplementedError instead of implementing it.
+
         Args:
             trade_date: snapshot date (YYYYMMDD); injected by api layer
             symbol: see README, supports comma-separated multiple codes; defaults to
@@ -178,11 +185,16 @@ class BaseSource(ABC):
         Returns:
             DataFrame with columns: symbol, date, factor
         """
-        pass
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support get_stock_factor"
+        )
 
-    @abstractmethod
     def get_stock_snapshot(self, symbol: str) -> pd.DataFrame:
         """Get real-time stock snapshot with 5-level order book.
+
+        Note:
+            Optional capability. Sources that don't support this raise
+            NotImplementedError instead of implementing it.
 
         Args:
             symbol: see README, supports comma-separated multiple codes
@@ -191,4 +203,6 @@ class BaseSource(ABC):
             DataFrame with columns: ets, lts, symbol, pre_close, open, high, low, last,
             volume, turnover, ap1~ap5, av1~av5, bp1~bp5, bv1~bv5
         """
-        pass
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support get_stock_snapshot"
+        )

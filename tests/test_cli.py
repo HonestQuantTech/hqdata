@@ -661,6 +661,66 @@ class TestCompareCalendar:
         assert result.exit_code != 0
         assert "Missing calendar file" in result.output
 
+    def test_non_default_sources_uses_suffixed_report_filename(self, runner, tmp_path):
+        """A non-default --sources pair must not clobber the default pair's report."""
+        write_calendar_csv(
+            tmp_path, "tushare", make_calendar("20260102", closed=("20260101",))
+        )
+        write_calendar_csv(tmp_path, "akshare", make_calendar("20260101", "20260103"))
+
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "calendar",
+                "--sources",
+                "tushare,akshare",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Differences found" in result.output
+        assert not (tmp_path / "compare" / "calendar_diff.csv").exists()
+        report = pd.read_csv(
+            tmp_path / "compare" / "calendar_diff_tushare_akshare.csv", dtype=str
+        )
+        assert "tushare_is_open" in report.columns
+        assert "akshare_is_open" in report.columns
+
+    def test_invalid_sources_rejected(self, runner, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "calendar",
+                "--sources",
+                "tushare,notasource",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Invalid" in result.output
+
+    def test_same_source_twice_rejected(self, runner, tmp_path):
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "calendar",
+                "--sources",
+                "tushare,tushare",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "must be different" in result.output
+
 
 class TestCompareStockList:
     def test_no_diff_after_normalization(self, runner, tmp_path):
@@ -753,6 +813,37 @@ class TestCompareStockList:
 
         assert result.exit_code != 0
         assert "Missing stock_list directory" in result.output
+
+    def test_non_default_sources_uses_suffixed_report_filename(self, runner, tmp_path):
+        """A non-default --sources pair must not clobber the default pair's report."""
+        write_stock_list_csv(
+            tmp_path, "tushare", "20260105", rows=[{"name": "平安银行"}]
+        )
+        write_stock_list_csv(
+            tmp_path, "akshare", "20260105", rows=[{"name": "平安錕行"}]
+        )
+
+        result = runner.invoke(
+            cli,
+            [
+                "--output",
+                str(tmp_path),
+                "compare",
+                "stock-list",
+                "--sources",
+                "tushare,akshare",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Differences found" in result.output
+        assert not (tmp_path / "compare" / "stock_list_diff.csv").exists()
+        report = pd.read_csv(
+            tmp_path / "compare" / "stock_list_diff_tushare_akshare.csv", dtype=str
+        )
+        assert list(report["status"]) == ["value_mismatch"]
+        assert "tushare_value" in report.columns
+        assert "akshare_value" in report.columns
 
     def test_ignores_future_delist_date(self, runner, tmp_path):
         """A delist_date later than the snapshot date has not taken effect yet."""

@@ -9,7 +9,7 @@ import pandas as pd
 import hqdata
 from hqdata.compare_cli import compare
 
-VALID_SOURCES = ["tushare", "ricequant"]
+VALID_SOURCES = ["tushare", "ricequant", "akshare"]
 
 
 # ---------------------------------------------------------------------------

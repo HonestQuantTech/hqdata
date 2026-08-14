@@ -17,25 +17,30 @@
 
 ## 支持的主要功能
 
-| 功能         | API                   | tushare | ricequant | 说明                             |
-| ------------ | --------------------- | :-----: | :-------: | -------------------------------- |
-| 交易日历     | `get_calendar`        |    ✓    |     ✓     |                                  |
-| 股票列表     | `get_stock_list`      |    ✓    |     ✓     | 获取指定交易日当天的上市股票列表 |
-| 股票实时快照 | `get_stock_snapshot`  |    ✓    |     ✓     | 含5档盘口                        |
-| 股票日线     | `get_stock_daily_bar` |    ✓    |     ✓     |                                  |
-| 复权因子     | `get_stock_factor`    |    ✓    |     ✓     | 累积后复权乘数                   |
+| 功能         | API                   | tushare | ricequant | akshare | 说明                             |
+| ------------ | --------------------- | :-----: | :-------: | :-----: | -------------------------------- |
+| 交易日历     | `get_calendar`        |    ✓    |     ✓     |    ✓    |                                  |
+| 股票列表     | `get_stock_list`      |    ✓    |     ✓     |    ✓    | 获取指定交易日当天的上市股票列表 |
+| 股票实时快照 | `get_stock_snapshot`  |    ✓    |     ✓     |    ✗    | 含5档盘口                        |
+| 股票日线     | `get_stock_daily_bar` |    ✓    |     ✓     |    ✗    |                                  |
+| 复权因子     | `get_stock_factor`    |    ✓    |     ✓     |    ✗    | 累积后复权乘数                   |
 
-另有更多功能，可以前往api.py查看所有功能。
+**akshare 能力说明：** akshare 免费、无需 token，底层是对新浪财经/东方财富网页数据的抓取封装：
+- 只接入了交易日历（`get_calendar`）和股票列表（`get_stock_list`）。日线、复权因子、实时快照
+  三个接口经实测数据源不稳定（抓取式接口，无官方限流保障，容易被新浪/东财临时封 IP，且只支持
+  单 symbol 查询），已停止支持。需要日线/复权因子/实时快照的场景请用 tushare 或 ricequant。
+- `get_stock_list` 中，akshare的历史股票池重建缺少北交所退市股票的数据源（沪深两所有对应的终止上市接口，
+  北交所没有找到），所以某个历史交易日已退市的北交所股票不会出现在结果里
 
 ## 支持的数据源
 
-| 数据源        | 状态   | 说明                                   |
-| ------------- | ------ | -------------------------------------- |
-| **tushare**   | 已接入 | 需满足账户2000积分, 部分功能需独立权限 |
-| **ricequant** | 已接入 | 需license，试用请前往官网申请权限      |
-| **AKShare**   | 计划中 | 免费，实时数据                         |
-| **迅投**      | 计划中 | 需迅投终端                             |
-| **iTick**     | 计划中 | 需注册                                 |
+| 数据源        | 状态   | 说明                              |
+| ------------- | ------ | --------------------------------- |
+| **tushare**   | 已接入 | 需满足账户2000积分                |
+| **ricequant** | 已接入 | 需license，试用请前往官网申请权限 |
+| **AKShare**   | 已接入 | 免费，无需注册                    |
+| **迅投**      | 计划中 | 需迅投终端                        |
+| **iTick**     | 计划中 | 需注册                            |
 
 ## 安装
 
@@ -48,6 +53,7 @@ pip install hqdata
 # 按需安装数据源依赖
 pip install hqdata[tushare]      # tushare 支持
 pip install hqdata[ricequant]    # ricequant 支持
+pip install hqdata[akshare]      # akshare 支持
 pip install hqdata[tushare,ricequant]  # 同时安装两者
 ```
 
@@ -109,7 +115,7 @@ hqdata [--source SOURCE] [--output DIR] COMMAND [options]
 
 使用子命令和 `--help` 可查看具体用法
 
-已落盘数据都可以直接做对比，以交易日历举例：
+已落盘数据都可以直接做对比，以交易日历举例（默认对比 tushare/ricequant）：
 
 ```bash
 hqdata --output ~/.hqdata compare calendar

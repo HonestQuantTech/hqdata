@@ -40,18 +40,8 @@ def assert_daily_bar_sanity(df: pd.DataFrame) -> None:
     assert df["date"].str.match(DATE_PATTERN).all(), "date not in YYYYMMDD format"
 
 
-class IntegrationTestMixin:
-    """Integration tests shared by every source adapter's TestXxxIntegration class.
-
-    Subclasses provide the `setup` autouse fixture that sets `self.source` and
-    `self.trade_date`. Override `_DAILY_BAR_KWARGS` for adapters whose
-    get_stock_daily_bar requires extra kwargs when called directly (bypassing
-    the api.py layer that would normally inject them).
-    """
-
-    _DAILY_BAR_KWARGS: dict = {}
-
-    # -- get_calendar ---------------------------------------------------
+class CalendarIntegrationMixin:
+    """get_calendar integration tests, shared by every source adapter."""
 
     def test_get_calendar(self):
         """Full range: every day present, is_open flags well-formed, subsets consistent."""
@@ -73,7 +63,9 @@ class IntegrationTestMixin:
         assert len(open_df) == 57, f"Expected 57 trading days, got {len(open_df)}"
         assert len(open_df) + len(closed_df) == len(df)
 
-    # -- get_stock_list -------------------------------------------------
+
+class StockListIntegrationMixin:
+    """get_stock_list integration tests, shared by every source adapter."""
 
     def test_get_stock_list_by_symbol(self):
         """Single symbol returns one row; comma-separated returns each requested symbol."""
@@ -118,7 +110,9 @@ class IntegrationTestMixin:
         )
         assert list(df["symbol"]) == ["000001.SZ"]
 
-    # -- get_stock_snapshot -----------------------------------------------
+
+class StockSnapshotIntegrationMixin:
+    """get_stock_snapshot integration tests, shared by every source adapter."""
 
     def test_get_stock_snapshot(self):
         df = self.source.get_stock_snapshot("000001.SZ,600000.SH")
@@ -132,7 +126,16 @@ class IntegrationTestMixin:
                 df[col].apply(lambda x: bool(ts_pattern.match(x))).all()
             ), f"{col} format should be YYYYMMDDTHHMMSSsss"
 
-    # -- get_stock_daily_bar ----------------------------------------------
+
+class StockDailyBarIntegrationMixin:
+    """get_stock_daily_bar integration tests, shared by every source adapter.
+
+    Override `_DAILY_BAR_KWARGS` for adapters whose get_stock_daily_bar
+    requires extra kwargs when called directly (bypassing the api.py layer
+    that would normally inject them).
+    """
+
+    _DAILY_BAR_KWARGS: dict = {}
 
     def test_get_stock_daily_bar(self):
         """Well-formed bars for one symbol per market, and for a multi-symbol query."""
@@ -150,7 +153,9 @@ class IntegrationTestMixin:
         assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
         assert_daily_bar_sanity(df)
 
-    # -- get_stock_factor ---------------------------------------------------
+
+class StockFactorIntegrationMixin:
+    """get_stock_factor integration tests, shared by every source adapter."""
 
     def test_get_stock_factor(self):
         """Well-formed factors for one symbol per market, and for a multi-symbol query."""
@@ -168,3 +173,19 @@ class IntegrationTestMixin:
         )
         assert set(df["symbol"]) == {"000001.SZ", "600000.SH"}
         assert (df["factor"] > 0).all(), "non-positive factor found"
+
+
+class IntegrationTestMixin(
+    CalendarIntegrationMixin,
+    StockListIntegrationMixin,
+    StockSnapshotIntegrationMixin,
+    StockDailyBarIntegrationMixin,
+    StockFactorIntegrationMixin,
+):
+    """Full integration suite for source adapters supporting every capability.
+
+    Subclasses provide the `setup` autouse fixture that sets `self.source` and
+    `self.trade_date`. Adapters that don't support every capability (e.g.
+    AkshareSource) should compose the individual mixins above directly instead
+    of using this class.
+    """
